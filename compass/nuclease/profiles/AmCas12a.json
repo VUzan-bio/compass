@@ -1,0 +1,38 @@
+{
+  "id": "AmCas12a",
+  "display_name": "AmCas12a",
+  "organism": "Anaeroglobus micronuciformis",
+  "mutations": null,
+  "pam": {
+    "canonical": ["G-start PAMs"],
+    "non_canonical": [],
+    "inactive": [],
+    "note": "Broader than TTTV \u2014 recognises G-start PAMs. Enables targeting sites inaccessible to all TTTV-restricted enzymes. Validated on 256-PAM dsDNA array."
+  },
+  "seed": {
+    "critical_positions": [1, 2, 3, 4, 5],
+    "tolerant_positions": [],
+    "specificity_dip": [],
+    "note": "PAM-proximal positions critical. Per-position mismatch tolerance not systematically quantified."
+  },
+  "kinetics": {
+    "avg_editing_HEK293T": 0.496,
+    "trans_kcat_Km": null,
+    "note": "49.6% avg editing in HEK293T (vs 65.5% AsCas12a, 25.6% LbCas12a controls). Trans-cleavage active but kinetic constants not published."
+  },
+  "temperature": {
+    "optimal_C": 37,
+    "active_range_C": [30, 42],
+    "heat_inactivation_C": null,
+    "low_temp_performance": "Not characterized. Subtype VIII variants (RbrCas12a) active at 25\u00b0C."
+  },
+  "divalent_cation": "Mn2+ preferred (2.5 mM MnSO4 for trans-cleavage)",
+  "snv_discrimination": "Demonstrated on KRAS G12C (10 copies, 0.1% VAF with RPA)",
+  "spacer_length": {"min": 20, "max": 23, "optimal": 20},
+  "structure": {"pdb": "8KGF", "resolution_A": 2.9, "method": "cryo-EM"},
+  "scanner_variant": null,
+  "scoring_trained": false,
+  "references": [
+    {"short": "Feng, Shi, Li et al. 2025", "doi": "10.1038/s41467-025-63160-4", "data": "Discovery via AIL-Scan (ESM LLM), 256-PAM array, editing efficiency, cryo-EM, KRAS G12C detection, Mn2+ preference"}
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "temperature": 7.5257,
+  "alpha": 0.0065,
+  "val_rho_cnn_raw": 0.74,
+  "val_rho_cnn_calibrated": 0.74,
+  "val_rho_heuristic": 0.1837,
+  "val_rho_ensemble": 0.7404,
+  "test_rho_cnn_raw": 0.5263,
+  "test_rho_cnn_calibrated": 0.5263,
+  "test_rho_ensemble": 0.5286,
+  "val_cnn_raw_range": [
+    0.012,
+    0.9673
+  ],
+  "val_cnn_calibrated_range": [
+    0.3577,
+    0.6107
+  ]
+}

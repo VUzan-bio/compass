@@ -1,0 +1,91 @@
+# ═══════════════════════════════════════════════════════════════
+# NARSIL — .gitignore
+# ═══════════════════════════════════════════════════════════════
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+*.whl
+dist/
+build/
+.venv/
+venv/
+env/
+.python-version
+
+# Environment variables (NEVER commit secrets)
+.env
+.env.*
+!.env.example
+
+# Claude Code session data
+.claude/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# Node — root level (shouldn't exist here, safety catch)
+/node_modules/
+/package-lock.json
+
+# Frontend
+narsil-ui/node_modules/
+narsil-ui/dist/
+narsil-ui/.env
+narsil-ui/.env.*
+
+# Pipeline outputs (regenerated every run)
+results/
+results/**
+*.json.bak
+
+# Bowtie2 index files (built from H37Rv.fasta via bowtie2-build)
+data/references/*.bt2
+data/references/*.bt2l
+
+# Training data (large, downloaded separately — see README)
+data/kim2018/raw/
+data/huang2024/
+narsil/data/kim2018/raw/
+narsil/data/kim2018/r_package/
+narsil/data/huang2024/
+
+# OS metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+
+# Logs
+*.log
+logs/
+
+# Pytest / Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Model weights (large binaries — download separately)
+*.pt
+*.pth
+*.onnx
+!narsil/weights/.gitkeep
+!narsil/weights/narsil_ml_best.pt
+!narsil/weights/narsil_ml_diagnostic.pt
+!narsil/weights/seq_cnn_best.pt
+!narsil/weights/seq_cnn_v2.pt
+
+# RNA-FM embedding cache
+narsil-net/data/embeddings/
+narsil-net/data/external/

@@ -1,0 +1,47 @@
+{
+  "id": "LbCas12a_WT",
+  "display_name": "LbCas12a (wild-type)",
+  "organism": "Lachnospiraceae bacterium ND2006",
+  "mutations": null,
+  "pam": {
+    "canonical": ["TTTA", "TTTC", "TTTG"],
+    "non_canonical": ["CTTA", "CTTC", "CTTG", "TTCA", "TTCC", "TTCG", "TCTV"],
+    "inactive": ["TTTT"],
+    "note": "More PAM-promiscuous than AsCas12a. Non-canonical PAMs show 20-40% of canonical activity."
+  },
+  "seed": {
+    "critical_positions": [1, 2, 3, 4, 5, 6, 7, 8],
+    "tolerant_positions": [19, 20, 21, 22, 23],
+    "specificity_dip": [9, 10, 11],
+    "note": "Positions 1-5 are pre-ordered in the binary complex (Swarts et al. 2017). Positions 19-23 tolerate single mismatches."
+  },
+  "kinetics": {
+    "trans_kcat_dsDNA_activator": 17.0,
+    "trans_kcat_ssDNA_activator": 3.0,
+    "trans_Km_nM": 31.0,
+    "trans_kcat_Km": 8.4e7,
+    "trans_kcat_Km_optimized": 6.7e8,
+    "cis_single_turnover": true,
+    "trans_multiple_turnover": true,
+    "units_note": "kcat in s\u207b\u00b9, Km in nM, kcat/Km in M\u207b\u00b9s\u207b\u00b9"
+  },
+  "temperature": {
+    "optimal_C": 37,
+    "active_range_C": [25, 42],
+    "heat_inactivation_C": 65,
+    "low_temp_performance": "Reduced activity below 30\u00b0C"
+  },
+  "divalent_cation": "Mg2+",
+  "snv_discrimination": "standard",
+  "spacer_length": {"min": 18, "max": 23, "optimal": 20},
+  "scanner_variant": "LbCas12a",
+  "scoring_trained": true,
+  "references": [
+    {"short": "Zetsche et al. 2015", "doi": "10.1016/j.cell.2015.09.038", "data": "Discovery, PAM, spacer length"},
+    {"short": "Strohkendl et al. 2018", "doi": "10.1016/j.molcel.2018.06.043", "data": "Kinetic basis, seed region, R-loop propagation"},
+    {"short": "Chen et al. 2018", "doi": "10.1126/science.aar6245", "data": "Trans-cleavage discovery, kcat/Km"},
+    {"short": "Swarts et al. 2017", "doi": "10.1016/j.molcel.2017.03.016", "data": "Structural basis, pre-ordered seed positions 1-5"},
+    {"short": "Huyke et al. 2025", "doi": "10.1093/nar/gkaf712", "data": "Optimized trans-cleavage kinetics, kcat/Km up to 6.7e8"},
+    {"short": "Kim et al. 2016", "doi": "10.1038/nbt.3609", "data": "Genome-wide specificity, Digenome-seq, avg 6 off-targets per crRNA"}
+  ]
+}

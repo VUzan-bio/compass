@@ -1,0 +1,29 @@
+{
+  "config": "CNN + RNA-FM + RLPA + Multi-task (real disc)",
+  "params": {
+    "total": 234855,
+    "shared": 199910,
+    "disc_head": 34945
+  },
+  "val_efficiency": {
+    "spearman_rho": 0.6758186000232917,
+    "pearson_r": 0.6972182553304429,
+    "mse": 0.0630940822714462,
+    "mae": 0.16445126376481872,
+    "top_k_precision": 0.4689922480620155
+  },
+  "test_efficiency": {
+    "spearman_rho": 0.4459419255691638,
+    "pearson_r": 0.5471161336851146,
+    "mse": 0.09447748000325974,
+    "mae": 0.2117259713183536,
+    "top_k_precision": 0.2921615201900237
+  },
+  "val_disc_r": 0.3985293333960644,
+  "test_disc_r": 0.38096960139429065,
+  "test_disc_rho": 0.40384884087407896,
+  "combined_metric": 0.875083266721324,
+  "best_epoch": 16,
+  "deployment_passed": true,
+  "seed": 42
+}

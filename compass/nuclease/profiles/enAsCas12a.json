@@ -1,0 +1,39 @@
+{
+  "id": "enAsCas12a",
+  "display_name": "enAsCas12a",
+  "organism": "Engineered from Acidaminococcus sp. BV3L6",
+  "mutations": ["E174R", "S542R", "K548R"],
+  "pam": {
+    "canonical": ["TTTA", "TTTC", "TTTG"],
+    "tier1_expanded": ["TTCA", "TTCC", "TTCG", "TTCT", "ATTC", "GTTC", "CTTA", "CTTC", "CTTG", "TATA", "TATC", "CTCC", "TCCC", "TACA"],
+    "tier2_expanded": ["TGTV", "ANCC", "CVCC", "TGCC", "GTCC", "TTAC"],
+    "inactive": ["TTTT"],
+    "note": "~7-fold expansion in targetable sequence space vs WT. S542R is the key PAM-expansion mutation. GUIDE-seq confirms more off-targets than WT at TTTV PAMs."
+  },
+  "seed": {
+    "critical_positions": [1, 2, 3, 4, 5, 6, 7],
+    "tolerant_positions": [19, 20, 21, 22, 23],
+    "specificity_dip": [9, 10, 11],
+    "note": "Seed architecture preserved but overall mismatch tolerance increased vs WT. enAsCas12a-HF1 (+ N282A) restores single-mismatch intolerance."
+  },
+  "kinetics": {
+    "trans_kcat_Km": null,
+    "note": "No published trans-cleavage kinetic constants. On-target editing ~2\u00d7 WT at TTTV PAMs."
+  },
+  "temperature": {
+    "optimal_C": 37,
+    "active_range_C": [30, 42],
+    "heat_inactivation_C": 65,
+    "low_temp_performance": "E174R improves performance at lower temperatures vs WT AsCas12a, but still underperforms LbCas12a at \u226432\u00b0C"
+  },
+  "divalent_cation": "Mg2+",
+  "snv_discrimination": "reduced_vs_WT",
+  "spacer_length": {"min": 18, "max": 23, "optimal": 20},
+  "scanner_variant": "enAsCas12a",
+  "scoring_trained": true,
+  "references": [
+    {"short": "Kleinstiver et al. 2019", "doi": "10.1038/s41587-018-0011-0", "data": "Mutations, expanded PAM set, HT-PAMDA profiling, GUIDE-seq off-targets"},
+    {"short": "Walton et al. 2020", "doi": "10.1126/science.aba8853", "data": "HT-PAMDA quantitative PAM landscape"},
+    {"short": "Walton et al. 2021", "doi": "10.1038/s41596-020-00465-2", "data": "HT-PAMDA protocol, raw rate constants"}
+  ]
+}

@@ -1,0 +1,94 @@
+{
+  "dataset": {
+    "name": "EasyDesign",
+    "n_pairs": 6136,
+    "n_guides": 1224,
+    "n_seed_pairs": 2363,
+    "cas_variant": "LbCas12a"
+  },
+  "features": {
+    "names": [
+      "spacer_position",
+      "in_seed",
+      "position_sensitivity",
+      "region_code",
+      "mismatch_destab",
+      "is_wobble",
+      "is_purine_purine",
+      "is_transition",
+      "mismatch_ddg",
+      "cumulative_dg_at_mm",
+      "seed_dg",
+      "total_hybrid_dg",
+      "energy_ratio",
+      "gc_content",
+      "local_gc"
+    ],
+    "n_features": 15
+  },
+  "heuristic_baseline": {
+    "rmse_log": 0.6412697420619964,
+    "corr_log": 0.2982086780188013,
+    "n_samples": 6136,
+    "median_pred_ratio": 1.5384615384615383,
+    "median_true_ratio": 3.3061307319194118
+  },
+  "cv_results": {
+    "xgboost": {
+      "mean_rmse": 0.5401770037652217,
+      "std_rmse": 0.0036181237734695536,
+      "mean_corr": 0.45855510741001965,
+      "std_corr": 0.0194326508678838,
+      "mean_ratio_corr": 0.2431611474667732,
+      "per_fold": [
+        {
+          "fold": 0,
+          "rmse": 0.535096413641543,
+          "corr": 0.46375055348186695,
+          "ratio_corr": 0.2276815197340705,
+          "n_test": 2059
+        },
+        {
+          "fold": 1,
+          "rmse": 0.5421910551034861,
+          "corr": 0.4325865182216512,
+          "ratio_corr": 0.21566171456101166,
+          "n_test": 2045
+        },
+        {
+          "fold": 2,
+          "rmse": 0.5432435425506361,
+          "corr": 0.4793282505265409,
+          "ratio_corr": 0.2861402081052374,
+          "n_test": 2032
+        }
+      ]
+    },
+    "neural": {}
+  },
+  "final_models": {
+    "xgboost": {
+      "train_rmse": 0.41160797651098463,
+      "train_corr": 0.7589792355685999,
+      "n_samples": 6136,
+      "backend": "lightgbm",
+      "feature_importance": {
+        "spacer_position": 544,
+        "in_seed": 6,
+        "position_sensitivity": 87,
+        "region_code": 1,
+        "mismatch_destab": 532,
+        "is_wobble": 2,
+        "is_purine_purine": 4,
+        "is_transition": 66,
+        "mismatch_ddg": 254,
+        "cumulative_dg_at_mm": 770,
+        "seed_dg": 1751,
+        "total_hybrid_dg": 1627,
+        "energy_ratio": 725,
+        "gc_content": 568,
+        "local_gc": 385
+      }
+    }
+  }
+}

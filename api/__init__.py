@@ -1,0 +1,1 @@
+"""COMPASS Platform — FastAPI backend."""

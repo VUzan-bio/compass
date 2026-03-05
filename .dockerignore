@@ -1,0 +1,11 @@
+__pycache__
+*.pyc
+.git
+.venv
+node_modules
+narsil-ui/node_modules
+results/
+*.egg-info
+.pytest_cache
+.mypy_cache
+.ruff_cache

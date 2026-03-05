@@ -1,0 +1,64 @@
+# COMPASS — MDR-TB 14-plex Diagnostic Panel Configuration
+# Full end-to-end pipeline: WHO catalogue → crRNA + RPA primers + multiplex panel.
+# Covers >95% clinical resistance across RIF, INH, EMB, PZA, FQ, AG + IS6110 control.
+
+name: mdr_14plex_full
+output_dir: results/mdr_14plex_full
+organism: mtb
+
+reference:
+  genome_fasta: data/references/H37Rv.fasta
+  genome_index: data/references/H37Rv
+  human_index: null
+  gff_annotation: data/references/H37Rv.gff3
+  genbank_annotation: null
+
+candidates:
+  spacer_lengths: [18, 19, 20, 21, 22, 23]
+  use_enascas12a: true
+  cas_variant: enAsCas12a
+  require_seed_mutation: true
+  gc_min: 0.30
+  gc_max: 0.75
+  homopolymer_max: 5
+  mfe_threshold: -3.0
+
+synthetic_mismatch:
+  enabled: true
+  cas_variant: enAsCas12a
+  min_activity_vs_mut: 0.25
+  min_discrimination_improvement: 1.5
+  max_synthetic_mismatches: 2
+  allow_double_sm: true
+
+scoring:
+  use_heuristic: true
+  use_ml: false
+  use_discrimination: true
+  ml_model_path: null
+  ml_model_name: heuristic
+  jepa_encoder_path: null
+  jepa_head_path: null
+  jepa_mode: efficiency
+  discrimination_min_ratio: 2.0
+
+multiplex:
+  max_plex: 14
+  optimizer: simulated_annealing
+  max_iterations: 10000
+  cross_reactivity_threshold: 0.3
+  efficiency_weight: 0.4
+  discrimination_weight: 0.3
+  cross_reactivity_weight: 0.3
+  include_is6110: true
+
+primers:
+  primer_length_min: 25
+  primer_length_max: 38
+  tm_min: 57.0
+  tm_max: 72.0
+  amplicon_min: 80
+  amplicon_max: 150
+  enable_allele_specific: true
+  as_rpa_deliberate_mm_pos: [-2, -3]
+  max_pairs_per_candidate: 10

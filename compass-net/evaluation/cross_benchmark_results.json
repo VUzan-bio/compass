@@ -1,0 +1,82 @@
+{
+  "description": "Cross-benchmark evaluation of all Compass-ML checkpoints",
+  "benchmarks": {
+    "kim2018": {
+      "description": "Kim et al. 2018 HT-PAMDA (HT2+HT3 held-out test)",
+      "readout": "cis-cleavage (indel frequency)",
+      "n_test": 4214
+    },
+    "easydesign_internal": {
+      "description": "EasyDesign (Huang et al. 2024) internal log-k split",
+      "readout": "trans-cleavage (fluorescence kinetics, log-k)",
+      "n_test": 1063,
+      "split": "random 80/10/10 on 10,634 log-k training samples (seed=42)",
+      "note": "Original EasyDesign test split discarded due to measurement mismatch (log-k train vs raw fluorescence test)"
+    }
+  },
+  "results": [
+    {
+      "name": "Kim-only (RLPA)",
+      "checkpoint": "phase1_rlpa_best.pt",
+      "training_data": "Kim 2018 only (15,000 cis-cleavage)",
+      "kim_rho": 0.5003,
+      "kim_r": 0.5383,
+      "ed_rho": 0.0452,
+      "ed_r": 0.0439,
+      "notes": "Previous production checkpoint. Strong on cis-cleavage, near-zero on trans-cleavage."
+    },
+    {
+      "name": "Multi-dataset no DA",
+      "checkpoint": "multidataset_noda_best.pt",
+      "training_data": "Kim 2018 + EasyDesign pooled (no domain adversarial)",
+      "kim_rho": 0.4866,
+      "kim_r": 0.4642,
+      "ed_rho": 0.5488,
+      "ed_r": 0.5341,
+      "notes": "NEW production checkpoint (compass_ml_diagnostic.pt). Best trans-cleavage performance while retaining cis-cleavage."
+    },
+    {
+      "name": "Multi-dataset + DA",
+      "checkpoint": "multidataset_da_best.pt",
+      "training_data": "Kim 2018 + EasyDesign with gradient reversal (lambda=0.1)",
+      "kim_rho": 0.4842,
+      "kim_r": 0.5325,
+      "ed_rho": 0.3905,
+      "ed_r": 0.3809,
+      "notes": "Domain adversarial hurts: GRL forces invariance that destroys domain-specific signal."
+    },
+    {
+      "name": "Phase1 + RNA-FM",
+      "checkpoint": "phase1_rnafm_best.pt",
+      "training_data": "Kim 2018 only (CNN + RNA-FM, no RLPA)",
+      "kim_rho": 0.4605,
+      "kim_r": 0.5288,
+      "ed_rho": 0.0605,
+      "ed_r": 0.0744,
+      "notes": "RNA-FM without RLPA. No trans-cleavage transfer."
+    },
+    {
+      "name": "EasyDesign-only",
+      "checkpoint": "easydesign_best.pt",
+      "training_data": "EasyDesign only (8,508 trans-cleavage, internal split)",
+      "kim_rho": 0.1147,
+      "kim_r": 0.1196,
+      "ed_rho": 0.5135,
+      "ed_r": 0.5098,
+      "notes": "Trans-cleavage specialist. Outperformed by multi-dataset pooling on its own data."
+    }
+  ],
+  "key_findings": [
+    "Cis-cleavage and trans-cleavage are nearly uncorrelated: Kim-only model scores rho=0.045 on trans-cleavage.",
+    "Multi-dataset pooling without DA gives the best all-rounder: rho=0.49 cis + rho=0.55 trans.",
+    "Domain adversarial training is counter-productive: destroys trans-cleavage signal (0.39 vs 0.55).",
+    "EasyDesign-only is outperformed by multi-dataset pooling on its own test set (0.51 vs 0.55).",
+    "EasyDesign dataset has a train/test measurement mismatch (log-k vs fluorescence) that we identified and corrected."
+  ],
+  "production_checkpoint": "compass_ml_diagnostic.pt (= multidataset_noda_best.pt)",
+  "calibration": {
+    "temperature": 1.07,
+    "alpha": 0.045,
+    "val_rho_on_kim": 0.6172
+  }
+}

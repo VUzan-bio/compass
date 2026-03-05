@@ -1,0 +1,1 @@
+"""Pre-defined diagnostic panels."""

@@ -1,0 +1,51 @@
+[
+  {
+    "label": "CNN-only (no features)",
+    "features": "one-hot spacer+PAM",
+    "kim_rho": 0.42,
+    "ed_rho": null,
+    "notes": "Baseline CNN, no thermodynamic or positional features"
+  },
+  {
+    "label": "CNN + thermo",
+    "features": "one-hot + dG + Tm",
+    "kim_rho": 0.45,
+    "ed_rho": null,
+    "notes": "Adding Sugimoto NN thermodynamic features"
+  },
+  {
+    "label": "CNN + thermo + positional",
+    "features": "one-hot + dG + Tm + pos",
+    "kim_rho": 0.47,
+    "ed_rho": null,
+    "notes": "Positional encoding for mismatch location"
+  },
+  {
+    "label": "CNN + RNA-FM (no RLPA)",
+    "features": "one-hot + RNA-FM embeddings",
+    "kim_rho": 0.46,
+    "ed_rho": 0.061,
+    "notes": "RNA foundation model embeddings, no RLPA augmentation"
+  },
+  {
+    "label": "Phase1 RLPA (Kim-only)",
+    "features": "one-hot + RNA-FM + RLPA",
+    "kim_rho": 0.50,
+    "ed_rho": 0.045,
+    "notes": "Previous production checkpoint. Strong cis, near-zero trans."
+  },
+  {
+    "label": "Multi-dataset + DA",
+    "features": "one-hot + RNA-FM + RLPA + GRL",
+    "kim_rho": 0.48,
+    "ed_rho": 0.391,
+    "notes": "Domain adversarial hurts: GRL forces invariance that destroys domain-specific signal"
+  },
+  {
+    "label": "Multi-dataset no DA (production)",
+    "features": "one-hot + RNA-FM + RLPA, pooled",
+    "kim_rho": 0.49,
+    "ed_rho": 0.549,
+    "notes": "Current production checkpoint (compass_ml_diagnostic.pt). Best all-rounder."
+  }
+]

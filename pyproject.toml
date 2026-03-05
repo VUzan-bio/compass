@@ -1,0 +1,109 @@
+[build-system]
+requires = ["setuptools>=68.0", "setuptools-scm>=8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "compass"
+version = "0.2.0"
+description = "COMPASS — Guide RNA Automated Resistance Diagnostics: CRISPR-Cas12a diagnostic panel design pipeline"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [{name = "Valentin Uzan", email = "valentin.uzan@holocyte.com"}]
+keywords = ["CRISPR", "Cas12a", "diagnostics", "tuberculosis", "MDR-TB", "crRNA", "biosensor"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "biopython>=1.83",
+    "numpy>=1.26",
+    "pandas>=2.2",
+    "pydantic>=2.6",
+    "pyyaml>=6.0",
+    "scipy>=1.12",
+]
+
+[project.optional-dependencies]
+ml = [
+    "torch>=2.2",
+    "scikit-learn>=1.4",
+    "lightgbm>=4.0",
+    "umap-learn>=0.5",
+]
+disc = [
+    "lightgbm>=4.0",
+    "scikit-learn>=1.4",
+]
+primers = [
+    "primer3-py>=2.0",
+]
+structure = [
+    "ViennaRNA>=2.6",
+]
+viz = [
+    "matplotlib>=3.8",
+    "seaborn>=0.13",
+]
+api = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "python-multipart",
+    "websockets>=12.0",
+]
+all = [
+    "compass[ml,primers,structure,viz,api]",
+]
+dev = [
+    "compass[all]",
+    "pytest>=8.0",
+    "pytest-cov>=4.1",
+    "pytest-asyncio>=0.23",
+    "httpx>=0.27",
+    "ruff>=0.3",
+    "mypy>=1.8",
+    "pre-commit>=3.6",
+]
+
+[project.scripts]
+compass = "compass.pipeline.cli:main"
+
+[project.urls]
+Repository = "https://github.com/VUzan-bio/compass"
+Documentation = "https://github.com/VUzan-bio/compass#readme"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["compass*"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "ANN", "B", "SIM"]
+ignore = ["ANN101", "ANN102", "ANN401"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_return_any = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["ViennaRNA.*", "primer3.*", "Bio.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+markers = [
+    "slow: marks tests that require external tools (deselect with '-m \"not slow\"')",
+    "requires_bowtie2: marks tests requiring bowtie2 installation",
+]
