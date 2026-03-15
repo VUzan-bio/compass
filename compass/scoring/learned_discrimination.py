@@ -119,8 +119,18 @@ class LearnedDiscriminationScorer(Scorer):
             from models.discrimination_model import FeatureDiscriminationModel
             self._model = FeatureDiscriminationModel.load(self._model_path)
 
-            from thermo_discrimination_features import compute_features_for_pair
+            from thermo_discrimination_features import compute_features_for_pair, FEATURE_NAMES, FEATURE_NAMES_V1
             self._feature_module = compute_features_for_pair
+
+            # Auto-detect feature version from checkpoint
+            n_feat = getattr(self._model, '_n_features', None)
+            if n_feat is None:
+                # Try to infer from pickle metadata
+                import pickle
+                with open(self._model_path, "rb") as f:
+                    meta = pickle.load(f)
+                n_feat = meta.get("n_features", 15)
+            self._feature_names = FEATURE_NAMES if n_feat >= 18 else FEATURE_NAMES_V1
 
             self._model_loaded = True
             logger.info(
@@ -231,11 +241,8 @@ class LearnedDiscriminationScorer(Scorer):
                     cas_variant=self.cas_variant,
                 )
 
-                # Predict — use V1 features (15) for backward compatibility
-                # with existing trained checkpoints. New models trained on
-                # FEATURE_NAMES (18) should set self._feature_version = "v2".
-                from thermo_discrimination_features import FEATURE_NAMES_V1
-                feature_names = FEATURE_NAMES_V1
+                # Auto-detect: use 18 features if v2 checkpoint, 15 if legacy
+                feature_names = self._feature_names
                 X = np.array(
                     [[features[n] for n in feature_names]],
                     dtype=np.float32,
