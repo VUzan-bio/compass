@@ -46,12 +46,13 @@ logger = logging.getLogger(__name__)
 _CONTEXT_LENGTH = 34
 _COMPASS_NET_DIR = Path(__file__).resolve().parent.parent.parent / "compass-net"
 _WEIGHTS_DIR = Path(__file__).resolve().parent.parent / "weights"
-# Prefer phase1_v2 (rho=0.7434, CNN+PAM) > diagnostic > best
+# Production default: diagnostic.pt (CNN+RNA-FM+RLPA, best M.tb generalisation)
+# phase1_v2 is CNN-only benchmark — collapses to 0.52 on GC-rich M.tb targets
 _DEFAULT_WEIGHTS = next(
     (p for p in [
-        _WEIGHTS_DIR / "compass_ml_phase1_v2.pt",
         _WEIGHTS_DIR / "compass_ml_diagnostic.pt",
         _WEIGHTS_DIR / "compass_ml_best.pt",
+        _WEIGHTS_DIR / "compass_ml_phase1_v2.pt",
     ] if p.exists()),
     _WEIGHTS_DIR / "compass_ml_diagnostic.pt",
 )
