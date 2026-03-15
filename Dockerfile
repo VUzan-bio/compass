@@ -13,7 +13,7 @@ FROM python:3.11-slim AS builder
 WORKDIR /build
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc g++ libffi-dev && \
+    gcc g++ libffi-dev git && \
     rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml README.md ./
@@ -22,6 +22,15 @@ COPY compass/ ./compass/
 RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 # disc covers scikit-learn + lightgbm; skip ml extra (umap-learn/numba not needed at runtime)
 RUN pip install --no-cache-dir -e ".[primers,api,viz,disc]"
+RUN pip install --no-cache-dir xgboost>=2.0
+
+# RNA-FM package (structural embeddings for crRNA folding/accessibility)
+RUN cd /tmp && git clone --depth 1 https://github.com/ml4bio/RNA-FM.git && \
+    cd RNA-FM && touch README_backup.md && pip install --no-cache-dir -e . && \
+    cd / && rm -rf /tmp/RNA-FM/.git
+
+# RNA-FM weights: downloaded at first pipeline run from HuggingFace CDN (~30s)
+COPY scripts/download_rnafm.py /app/scripts/download_rnafm.py
 
 # Stage 2: Lean runtime (no compilers)
 FROM python:3.11-slim
@@ -32,9 +41,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     bowtie2 libgomp1 && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy installed packages from builder
+# Copy installed packages from builder (includes RNA-FM, xgboost, etc.)
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Copy RNA-FM source from builder (editable install needs it)
+COPY --from=builder /tmp/RNA-FM /tmp/RNA-FM
 
 # Application code
 COPY pyproject.toml README.md ./
@@ -51,14 +63,6 @@ COPY compass-net/ ./compass-net/
 
 # Editable install (egg-link only, no downloads)
 RUN pip install --no-cache-dir --no-deps -e .
-
-# XGBoost for discrimination model
-RUN pip install --no-cache-dir xgboost>=2.0
-
-# RNA-FM for live structural embedding inference (~400MB model, loaded on first use)
-RUN cd /tmp && git clone --depth 1 https://github.com/ml4bio/RNA-FM.git && \
-    cd RNA-FM && touch README_backup.md && pip install --no-cache-dir -e . && \
-    cd / && rm -rf /tmp/RNA-FM/.git
 
 # Build Bowtie2 index
 RUN bowtie2-build data/references/H37Rv.fasta data/references/H37Rv

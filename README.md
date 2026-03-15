@@ -4,7 +4,7 @@
 
 End-to-end computational pipeline for designing multiplexed CRISPR-Cas12a diagnostic panels targeting drug-resistant *Mycobacterium tuberculosis* from blood.
 
-Live platform: [compass-design.app](https://compass-design.app/)
+Live platform: [compass-crispr.com](https://compass-crispr.com/)
 
 ---
 

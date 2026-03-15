@@ -511,6 +511,22 @@ class CompassMlScorer(Scorer):
                 pam_embed_dim=pam_embed_dim,
             )
 
+            # Remap checkpoint keys: training scripts may use short names
+            # (attn, head) vs CompassML class names (attention, efficiency_head)
+            key_remap = {
+                "attn.": "attention.",
+                "head.": "efficiency_head.",
+            }
+            remapped = {}
+            for k, v in state_dict.items():
+                new_k = k
+                for old_prefix, new_prefix in key_remap.items():
+                    if k.startswith(old_prefix):
+                        new_k = new_prefix + k[len(old_prefix):]
+                        break
+                remapped[new_k] = v
+            state_dict = remapped
+
             # Handle partial loading: filter out unexpected keys (e.g.
             # domain_head from training) and allow missing keys (e.g.
             # disc_head when loading RLPA checkpoint into multitask model)
@@ -672,6 +688,33 @@ class CompassMlScorer(Scorer):
             self._rnafm_live_cache: dict[str, np.ndarray] = {}
             try:
                 import fm
+                import os
+
+                # Ensure weights exist before loading (CUHK server is flaky)
+                weights_path = os.path.expanduser(
+                    "~/.cache/torch/hub/checkpoints/RNA-FM_pretrained.pth"
+                )
+                if not os.path.exists(weights_path) or os.path.getsize(weights_path) < 1_000_000_000:
+                    os.makedirs(os.path.dirname(weights_path), exist_ok=True)
+                    logger.info("Downloading RNA-FM weights from HuggingFace (~1.1GB, ~30s)...")
+                    import urllib.request
+                    urls = [
+                        "https://huggingface.co/orgava/rna-fm-weights/resolve/main/RNA-FM_pretrained.pth",
+                        "https://proj.cse.cuhk.edu.hk/rnafm/api/download?filename=RNA-FM_pretrained.pth",
+                    ]
+                    for url in urls:
+                        for attempt in range(5):
+                            try:
+                                urllib.request.urlretrieve(url, weights_path)
+                                if os.path.getsize(weights_path) > 1_000_000_000:
+                                    logger.info("RNA-FM weights OK (%.0f MB)", os.path.getsize(weights_path) / 1e6)
+                                    break
+                            except Exception as dl_err:
+                                logger.info("RNA-FM attempt %d: %s", attempt + 1, str(dl_err)[:80])
+                        else:
+                            continue
+                        break
+
                 model, alphabet = fm.pretrained.rna_fm_t12()
                 model = model.to(self._device).eval()
                 self._rnafm_model = model
@@ -700,7 +743,11 @@ class CompassMlScorer(Scorer):
                     tokens.to(self._device), repr_layers=[12],
                 )
             emb = results["representations"][12][:, 1:-1, :].cpu().numpy()
-            emb_20 = emb[0][:20].astype(np.float32)  # (20, 640)
+            # Pad or truncate to exactly 20 positions (spacer lengths vary 18-23)
+            raw = emb[0].astype(np.float32)
+            emb_20 = np.zeros((20, 640), dtype=np.float32)
+            n = min(raw.shape[0], 20)
+            emb_20[:n] = raw[:n]
 
             # Cache for this session
             self._rnafm_live_cache[crrna_rna] = emb_20
