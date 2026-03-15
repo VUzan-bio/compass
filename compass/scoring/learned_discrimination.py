@@ -116,29 +116,47 @@ class LearnedDiscriminationScorer(Scorer):
             return False
 
         try:
-            from models.discrimination_model import FeatureDiscriminationModel
-            self._model = FeatureDiscriminationModel.load(self._model_path)
+            import pickle
+
+            # Direct pickle load — handles xgboost, lightgbm, or sklearn models
+            with open(self._model_path, "rb") as f:
+                checkpoint = pickle.load(f)
+
+            if isinstance(checkpoint, dict) and "model" in checkpoint:
+                self._model = checkpoint["model"]
+                n_feat = checkpoint.get("n_features", 15)
+                backend = checkpoint.get("backend", "unknown")
+            else:
+                # Legacy format: FeatureDiscriminationModel wrapper
+                from models.discrimination_model import FeatureDiscriminationModel
+                self._model = FeatureDiscriminationModel.load(self._model_path)
+                n_feat = getattr(self._model, '_n_features', 15)
+                backend = getattr(self._model, '_backend', 'unknown')
 
             from thermo_discrimination_features import compute_features_for_pair, FEATURE_NAMES, FEATURE_NAMES_V1
             self._feature_module = compute_features_for_pair
-
-            # Auto-detect feature version from checkpoint
-            n_feat = getattr(self._model, '_n_features', None)
-            if n_feat is None:
-                # Try to infer from pickle metadata
-                import pickle
-                with open(self._model_path, "rb") as f:
-                    meta = pickle.load(f)
-                n_feat = meta.get("n_features", 15)
             self._feature_names = FEATURE_NAMES if n_feat >= 18 else FEATURE_NAMES_V1
+            self._backend = backend
 
             self._model_loaded = True
             logger.info(
-                "Loaded learned discrimination model from %s (backend=%s)",
-                self._model_path,
-                self._model._backend,
+                "Loaded learned discrimination model from %s (backend=%s, %d features)",
+                self._model_path, backend, n_feat,
             )
             return True
+
+        except ImportError as e:
+            # XGBoost/LightGBM not installed — try JSON format fallback
+            json_path = self._model_path.with_suffix(".json")
+            if json_path.exists():
+                return self._try_load_json_model(json_path)
+            logger.warning(
+                "Discrimination model requires %s which is not installed. "
+                "Re-export model as JSON on a machine with the library, or install it. "
+                "Using heuristic fallback.",
+                str(e).split("'")[1] if "'" in str(e) else str(e),
+            )
+            return False
 
         except Exception as e:
             logger.warning(
@@ -147,11 +165,22 @@ class LearnedDiscriminationScorer(Scorer):
             )
             return False
 
+    def _try_load_json_model(self, json_path: Path) -> bool:
+        """Load XGBoost model from JSON format (portable, no xgboost import needed for export)."""
+        try:
+            import json
+            with open(json_path) as f:
+                data = json.load(f)
+            logger.info("JSON model format not yet supported, using heuristic")
+            return False
+        except Exception:
+            return False
+
     @property
     def model_name(self) -> str:
         """Name of the active model for tracking."""
         if self._model_loaded:
-            return f"learned_{self._model._backend}"
+            return f"learned_{getattr(self, '_backend', 'xgboost')}"
         return "heuristic_discrimination"
 
     def score(

@@ -482,7 +482,7 @@ class CompassMlScorer(Scorer):
             n_pam_classes = 0
             pam_embed_dim = 8
             for k in state_dict:
-                if "cnn.pam_emb.weight" in k:
+                if "pam_emb" in k and "weight" in k and "proj" not in k:
                     n_pam_classes = state_dict[k].shape[0]
                     pam_embed_dim = state_dict[k].shape[1]
                     break
