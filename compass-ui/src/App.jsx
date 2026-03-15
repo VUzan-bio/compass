@@ -2871,25 +2871,25 @@ const OverviewTab = ({ results, scorer, jobId }) => {
           <div><strong>{assayReady}/{totalTargets} targets are assay-ready</strong> across {drugs.length} drug classes ({drugs.join(", ")}). {directCount} use direct crRNA discrimination, {proximityCount} rely on AS-RPA primer selectivity for allelic specificity.</div>
           <div>
             {avgActivity >= 0.8
-              ? `Mean predicted activity of ${avgActivity} indicates strong Cas12a trans-cleavage efficiency. Activity range ${minScore}\u2013${maxScore} suggests all candidates should produce detectable electrochemical signal.`
+              ? `Mean predicted activity of ${avgActivity} indicates strong Cas12a cis-cleavage efficiency, predicting robust trans-cleavage activation and detectable SWV peak reduction on LIG electrodes. Activity range ${minScore}\u2013${maxScore} suggests consistent signal across the panel.`
               : avgActivity >= 0.6
-              ? `Mean predicted activity of ${avgActivity} is moderate. Weaker candidates (activity < 0.6) may require extended incubation or surface chemistry optimisation to reach detection threshold.`
-              : `Mean predicted activity of ${avgActivity} is below optimal. Consider re-running with relaxed GC or expanded spacer lengths to improve candidate quality.`
+              ? `Mean predicted activity of ${avgActivity} is moderate. On the electrochemical platform, weaker candidates may require extended incubation (>30 min) or increased Cas12a concentration to reach the 3\u03c3 detection threshold on MB-ssDNA reporters.`
+              : `Mean predicted activity of ${avgActivity} reflects the Compass-ML efficiency prediction (trained on Kim 2018, human cell cis-cleavage). Scores below 0.6 indicate predicted activity in the lower range \u2014 however, the ranking between candidates remains informative for synthesis prioritisation. Actual trans-cleavage efficiency on the LIG electrode will differ and requires experimental measurement.`
             }
-            {avgPamAdj != null && avgPamAdj < avgActivity * 0.85 ? ` PAM-adjusted average (${avgPamAdj}) reflects activity penalties from non-canonical enAsCas12a PAM sites.` : ""}
+            {avgPamAdj != null && avgPamAdj < avgActivity * 0.85 ? ` PAM-adjusted average (${avgPamAdj}) reflects enAsCas12a activity penalties on non-canonical PAMs (Kleinstiver et al. 2019). Canonical TTTV candidates retain full predicted activity; expanded PAMs (TTCV, TATV, CTTV) are penalised 35\u201375%.` : ""}
           </div>
           <div>
             {highDisc >= directCount * 0.8
-              ? `${highDisc}/${directResults.length} direct candidates exceed the 3\u00d7 diagnostic-grade discrimination threshold (avg ${avgDisc}\u00d7). Panel is well-suited for single-nucleotide resistance genotyping.`
+              ? `${highDisc}/${directResults.length} direct candidates exceed the 3\u00d7 diagnostic-grade threshold (avg ${avgDisc}\u00d7, predicted by XGBoost on 18 thermodynamic features). At these ratios, the MUT electrochemical signal is clearly resolvable from WT on both SWV and lateral-flow readouts. Panel is well-suited for single-nucleotide resistance genotyping.`
               : highDisc >= directCount * 0.5
-              ? `${highDisc}/${directResults.length} direct candidates meet diagnostic-grade discrimination (\u22653\u00d7). Targets below threshold may benefit from synthetic mismatch enhancement or AS-RPA primer redesign.`
-              : `Only ${highDisc}/${directResults.length} direct candidates reach diagnostic-grade discrimination. Synthetic mismatch enhancement is recommended for low-discrimination targets.`
+              ? `${highDisc}/${directResults.length} direct candidates meet diagnostic-grade discrimination (\u22653\u00d7). Targets below threshold should be prioritised for synthetic mismatch enhancement (seed positions 2\u20136) to improve WT suppression before electrode validation.`
+              : `Only ${highDisc}/${directResults.length} direct candidates reach diagnostic-grade discrimination. Synthetic mismatch enhancement (Kohabir et al. 2024) at seed positions 2\u20136 is recommended. Alternatively, these targets may perform better as proximity candidates with AS-RPA primer selectivity.`
             }
           </div>
           {(missingPrimers.length > 0 || belowThreshold.length > 0) && (
             <div>
               {missingPrimers.length > 0 ? `${missingPrimers.length} target${missingPrimers.length > 1 ? "s" : ""} lack RPA primers \u2014 these cannot be amplified and are not deployable. ` : ""}
-              {belowThreshold.length > 0 ? `${belowThreshold.length} target${belowThreshold.length > 1 ? "s" : ""} fall below readiness threshold (${belowThreshold.map(r => r.label).join(", ")}). Consider alternative spacers or backup candidates.` : ""}
+              {belowThreshold.length > 0 ? `${belowThreshold.length} target${belowThreshold.length > 1 ? "s" : ""} fall below readiness threshold (${belowThreshold.map(r => r.label).join(", ")}). These should still be synthesised for experimental validation \u2014 in silico readiness scores are conservative estimates. Prioritise these for the first round of electrode characterisation to calibrate the model.` : ""}
             </div>
           )}
           {withPrimers === totalTargets && belowThreshold.length === 0 && (

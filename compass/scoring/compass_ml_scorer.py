@@ -636,26 +636,78 @@ class CompassMlScorer(Scorer):
         return one_hot_encode(window, max_len=_CONTEXT_LENGTH)
 
     def _get_rnafm_embedding(self, candidate: CrRNACandidate) -> Optional[np.ndarray]:
-        """Look up RNA-FM embedding for a candidate's crRNA spacer.
+        """Get RNA-FM embedding for a candidate's crRNA spacer.
 
-        The crRNA spacer is the reverse complement of the protospacer
-        (target DNA), with T→U conversion for RNA.
+        Strategy: cache lookup first, live inference on cache miss.
+        Live inference requires the RNA-FM model in memory (~400MB).
 
-        Returns (20, 640) numpy array or None on cache miss.
+        Returns (20, 640) numpy array or None if RNA-FM unavailable.
         """
-        if self._rnafm_cache is None:
-            return None
-
         # crRNA spacer = reverse complement of DNA spacer, T→U
         spacer_dna = candidate.spacer_seq
         crrna_rna = "".join(
             _DNA_TO_RNA_RC.get(b, "N") for b in reversed(spacer_dna.upper())
         )
 
-        emb = self._rnafm_cache.get(crrna_rna)
-        if emb is None:
+        # Try cache first
+        if self._rnafm_cache is not None:
+            emb = self._rnafm_cache.get(crrna_rna)
+            if emb is not None:
+                return emb.numpy() if hasattr(emb, 'numpy') else emb
+
+        # Live inference on cache miss
+        return self._compute_rnafm_live(crrna_rna)
+
+    def _compute_rnafm_live(self, crrna_rna: str) -> Optional[np.ndarray]:
+        """Compute RNA-FM embedding on-the-fly for a single crRNA.
+
+        Lazy-loads the RNA-FM model on first call (~400MB, 2-3 sec).
+        Subsequent calls are ~5ms per sequence on CPU.
+        Results are cached in memory for the session.
+        """
+        # Lazy init
+        if not hasattr(self, '_rnafm_model'):
+            self._rnafm_model = None
+            self._rnafm_alphabet = None
+            self._rnafm_live_cache: dict[str, np.ndarray] = {}
+            try:
+                import fm
+                model, alphabet = fm.pretrained.rna_fm_t12()
+                model = model.to(self._device).eval()
+                self._rnafm_model = model
+                self._rnafm_alphabet = alphabet
+                logger.info("RNA-FM model loaded for live inference (%d params)",
+                            sum(p.numel() for p in model.parameters()))
+            except ImportError:
+                logger.info("RNA-FM (fm package) not installed — using zero embeddings")
+            except Exception as e:
+                logger.warning("Failed to load RNA-FM: %s — using zero embeddings", e)
+
+        if self._rnafm_model is None:
             return None
-        return emb.numpy()
+
+        # Check live cache
+        if crrna_rna in self._rnafm_live_cache:
+            return self._rnafm_live_cache[crrna_rna]
+
+        # Compute embedding
+        try:
+            import torch
+            bc = self._rnafm_alphabet.get_batch_converter()
+            _, _, tokens = bc([("seq", crrna_rna)])
+            with torch.no_grad():
+                results = self._rnafm_model(
+                    tokens.to(self._device), repr_layers=[12],
+                )
+            emb = results["representations"][12][:, 1:-1, :].cpu().numpy()
+            emb_20 = emb[0][:20].astype(np.float32)  # (20, 640)
+
+            # Cache for this session
+            self._rnafm_live_cache[crrna_rna] = emb_20
+            return emb_20
+        except Exception as e:
+            logger.debug("RNA-FM live inference failed for %s: %s", crrna_rna[:10], e)
+            return None
 
     # ------------------------------------------------------------------
     # Private — prediction

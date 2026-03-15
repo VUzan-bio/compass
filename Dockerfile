@@ -55,6 +55,11 @@ RUN pip install --no-cache-dir --no-deps -e .
 # XGBoost for discrimination model
 RUN pip install --no-cache-dir xgboost>=2.0
 
+# RNA-FM for live structural embedding inference (~400MB model, loaded on first use)
+RUN cd /tmp && git clone --depth 1 https://github.com/ml4bio/RNA-FM.git && \
+    cd RNA-FM && touch README_backup.md && pip install --no-cache-dir -e . && \
+    cd / && rm -rf /tmp/RNA-FM/.git
+
 # Build Bowtie2 index
 RUN bowtie2-build data/references/H37Rv.fasta data/references/H37Rv
 
