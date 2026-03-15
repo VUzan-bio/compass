@@ -12,8 +12,6 @@ COMPASS takes WHO-catalogued drug-resistance mutations as input and produces a c
 
 ## Pipeline
 
-<img width="936" height="470" alt="compass-archit" src="https://github.com/user-attachments/assets/800af375-aea3-4ae2-80d2-4e0f7912fcfe" />
-
 <br />
 
 Ten modules execute sequentially across three processing blocks:
