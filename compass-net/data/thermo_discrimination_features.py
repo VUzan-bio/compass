@@ -1,6 +1,6 @@
 """Thermodynamic feature computation for discrimination prediction.
 
-Computes 15 features encoding the biophysical determinants of Cas12a
+Computes 18 features encoding the biophysical determinants of Cas12a
 mismatch discrimination:
 
 Position features (4):
@@ -25,6 +25,11 @@ Thermodynamic features (5):
 Context features (2):
   14. gc_content:             GC fraction of spacer (0-1)
   15. local_gc:               GC fraction in ±2 nt window around mismatch
+
+Cooperative context features (3) — Gap 8 additions:
+  16. flank_at_rich:          AT fraction of ±1 flanking bases (0-1)
+  17. pam_to_mm_distance:     normalised mismatch position (0-1)
+  18. upstream_gc:            GC fraction upstream of mismatch (R-loop stability proxy)
 
 References:
   - Sugimoto et al. (2000) Biochemistry — RNA:DNA mismatch ΔΔG
@@ -216,6 +221,31 @@ def compute_features_for_pair(
     local_seq = spacer_dna[window_start:window_end].upper()
     local_gc = sum(1 for b in local_seq if b in "GC") / max(len(local_seq), 1)
 
+    # ── Gap 8: Additional features (Strohkendl 2018, Kim 2020) ──
+
+    # Cooperativity context: adjacent nucleotide identity affects mismatch
+    # tolerance. AU-rich flanks around the mismatch make the R-loop less
+    # stable locally, amplifying the mismatch penalty (Strohkendl 2018).
+    if mm_idx > 0 and mm_idx < spacer_len - 1:
+        left_base = spacer_dna[mm_idx - 1].upper()
+        right_base = spacer_dna[mm_idx + 1].upper()
+        flank_at_rich = sum(1 for b in [left_base, right_base] if b in "AT") / 2.0
+    else:
+        flank_at_rich = 0.5  # edge position, neutral
+
+    # PAM-to-mismatch distance: number of base-paired positions between
+    # PAM boundary and mismatch. Determines how much R-loop has propagated
+    # before encountering the disruption. Directly from position but
+    # normalised to [0, 1] for the model.
+    pam_to_mm_distance = spacer_position / max(spacer_len, 1)
+
+    # Local secondary structure proxy: GC density in seed region upstream
+    # of mismatch — high GC upstream = stable R-loop = more tolerant to
+    # mismatch (harder to discriminate).
+    upstream_end = min(mm_idx, spacer_len)
+    upstream_seq = spacer_dna[:upstream_end].upper() if upstream_end > 0 else ""
+    upstream_gc = sum(1 for b in upstream_seq if b in "GC") / max(len(upstream_seq), 1) if upstream_seq else 0.5
+
     return {
         # Position (4)
         "spacer_position": float(spacer_position),
@@ -236,6 +266,10 @@ def compute_features_for_pair(
         # Context (2)
         "gc_content": gc_content,
         "local_gc": local_gc,
+        # Gap 8: Cooperative context (3)
+        "flank_at_rich": flank_at_rich,
+        "pam_to_mm_distance": pam_to_mm_distance,
+        "upstream_gc": upstream_gc,
     }
 
 
@@ -245,6 +279,8 @@ FEATURE_NAMES = [
     "mismatch_ddg", "cumulative_dg_at_mm", "seed_dg", "total_hybrid_dg",
     "energy_ratio",
     "gc_content", "local_gc",
+    # Gap 8: cooperative context features (Strohkendl 2018, Kim 2020)
+    "flank_at_rich", "pam_to_mm_distance", "upstream_gc",
 ]
 
 

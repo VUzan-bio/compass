@@ -26,6 +26,7 @@ from compass.core.constants import (
     GC_OPTIMAL_DEFAULT,
     GC_OPTIMAL_MTB,
     HEURISTIC_WEIGHTS,
+    HEURISTIC_WEIGHTS_MTB,
     HOMOPOLYMER_MAX,
     MFE_THRESHOLD,
     SEED_REGION_END,
@@ -62,7 +63,12 @@ class HeuristicScorer(Scorer):
         weights: dict[str, float] | None = None,
         organism: str = "default",
     ) -> None:
-        self.weights = weights or HEURISTIC_WEIGHTS
+        if weights is not None:
+            self.weights = weights
+        elif organism == "mtb":
+            self.weights = HEURISTIC_WEIGHTS_MTB
+        else:
+            self.weights = HEURISTIC_WEIGHTS
         self.gc_optimal = GC_OPTIMAL_MTB if organism == "mtb" else GC_OPTIMAL_DEFAULT
 
     def score(

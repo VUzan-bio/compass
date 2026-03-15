@@ -11,11 +11,17 @@ v1 architecture:
 This branch preserves the same layer structure but parameterises the
 output dimension for flexibility in Compass-ML fusion.
 
+Gap 7: Optional PAM embedding — for enAsCas12a with 9 PAM variants and
+activity penalties (0.25-1.0), a dedicated PAM encoder provides explicit
+PAM-type information that is otherwise diluted across 34-position convolutions.
+
 Input:  (batch, 4, 34) one-hot encoded target DNA
+        (batch,) optional PAM class index (0-8 for enAsCas12a variants)
 Output: (batch, 34, out_dim) per-position feature vectors
 
 References:
     Kim et al., Nature Biotechnology 36:239-241 (2018). PMID: 29431740.
+    Kleinstiver et al., Nature Biotechnology 37:276-282 (2019) — enAsCas12a PAMs.
 """
 
 from __future__ import annotations
@@ -40,6 +46,9 @@ class CNNBranch(nn.Module):
         in_channels: int = 4,
         branches: int = 40,
         out_dim: int = 96,
+        # Gap 7: explicit PAM encoding
+        n_pam_classes: int = 0,
+        pam_embed_dim: int = 8,
     ):
         super().__init__()
         concat_ch = branches * 3  # 120 for default
@@ -73,6 +82,15 @@ class CNNBranch(nn.Module):
             nn.GELU(),
         )
 
+        # Gap 7: PAM embedding
+        self.n_pam_classes = n_pam_classes
+        if n_pam_classes > 0:
+            self.pam_embedding = nn.Embedding(n_pam_classes, pam_embed_dim)
+            # Project PAM embedding to match CNN channels, broadcast to all positions
+            self.pam_proj = nn.Linear(pam_embed_dim, concat_ch)
+            # Note: PAM embedding is ADDED to conv features before reduction,
+            # so it modulates all positions equally (PAM type affects global activity).
+
         # Channel reduction
         self.reduce = nn.Sequential(
             nn.Conv1d(concat_ch, out_dim, kernel_size=1),
@@ -80,14 +98,27 @@ class CNNBranch(nn.Module):
             nn.GELU(),
         )
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self,
+        x: torch.Tensor,
+        pam_class: torch.Tensor | None = None,
+    ) -> torch.Tensor:
         """
         Args:
             x: (batch, 4, seq_len) one-hot encoded target DNA.
+            pam_class: (batch,) int tensor, PAM variant index 0..n_pam_classes-1.
+                       None if PAM encoding is disabled.
         Returns:
             (batch, seq_len, out_dim) per-position features.
         """
         h = torch.cat([self.branch3(x), self.branch5(x), self.branch7(x)], dim=1)
         h = h + self.dilated2(self.dilated1(h))  # residual around both dilated layers
+
+        # Gap 7: Add PAM embedding (broadcast to all positions)
+        if self.n_pam_classes > 0 and pam_class is not None:
+            pam_emb = self.pam_embedding(pam_class)       # (batch, pam_embed_dim)
+            pam_feat = self.pam_proj(pam_emb)             # (batch, concat_ch)
+            h = h + pam_feat.unsqueeze(-1)                # broadcast to seq_len
+
         h = self.reduce(h)          # (batch, out_dim, seq_len)
         return h.permute(0, 2, 1)   # (batch, seq_len, out_dim)

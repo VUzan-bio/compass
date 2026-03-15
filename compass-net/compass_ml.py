@@ -234,6 +234,9 @@ class CompassML(nn.Module):
             wt_pooled = self._pool_and_append_scalars(wt_feat, scalar_features)
             output["discrimination"] = self.disc_head(
                 mut_pooled, wt_pooled, thermo_feats, mm_position,
+                # Gap 4: pass per-position features for cross-attention
+                mut_feat_seq=mut_feat,
+                wt_feat_seq=wt_feat,
             )
             output["z_mut"] = mut_pooled
             output["z_wt"] = wt_pooled

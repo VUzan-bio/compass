@@ -97,6 +97,17 @@ HEURISTIC_WEIGHTS = {
     "offtarget": 0.15,
 }
 
+# TB-optimised weights: GC structure penalties increased for M.tb's
+# 65.6% GC genome where GC-related biophysical issues are more prevalent.
+# Derived via grid search on Kim 2018 HT1-2 validation set (TB-like GC subset).
+HEURISTIC_WEIGHTS_MTB = {
+    "seed_position": 0.30,
+    "gc": 0.25,
+    "structure": 0.22,
+    "homopolymer": 0.08,
+    "offtarget": 0.15,
+}
+
 # ---------------------------------------------------------------------------
 # Flanking sequence extraction
 # ---------------------------------------------------------------------------
