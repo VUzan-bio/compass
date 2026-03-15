@@ -163,12 +163,9 @@ class COMPASSPipeline:
         self.heuristic_scorer = HeuristicScorer(organism=config.organism)
 
         # Module 5 ML: scorer selection (Compass-ML or SeqCNN)
-        if (
-            config.scoring.scorer == "compass_ml"
-            and config.scoring.compass_ml_weights
-            and Path(config.scoring.compass_ml_weights).exists()
-        ):
+        if config.scoring.scorer == "compass_ml":
             from compass.scoring.compass_ml_scorer import CompassMlScorer
+            # weights_path=None triggers auto-detection: phase1_v2 > diagnostic > best
             self.ml_scorer = CompassMlScorer(
                 weights_path=config.scoring.compass_ml_weights,
                 heuristic_fallback=self.heuristic_scorer,
