@@ -94,7 +94,7 @@ class MismatchGenerator:
         mm_pos = candidate.mutation_position_in_spacer
         ref_base = candidate.ref_base_at_mutation
 
-        logger.info(
+        logger.debug(
             "M5.5 %s: spacer=%s mut_pos=%s ref_base=%s ref=%s alt=%s strand=%s",
             candidate.target_label,
             candidate.spacer_seq[:12] + "...",
@@ -147,7 +147,7 @@ class MismatchGenerator:
                 candidate.target_label, mm_type, positions,
             )
         else:
-            logger.info(
+            logger.debug(
                 "M5.5 %s: OK mut=%s wt=%s mm_type=%s positions=%s",
                 candidate.target_label, mut_spacer[:12], wt_spacer[:12], mm_type, positions,
             )

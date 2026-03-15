@@ -761,7 +761,7 @@ class COMPASSPipeline:
             cas_variant=self.config.candidates.resolve_enzyme_id(),
             allow_double_synthetic=self.config.synthetic_mismatch.allow_double_sm,
             min_activity_vs_mut=self.config.synthetic_mismatch.min_activity_vs_mut,
-            search_radius=6,
+            search_radius=4,  # ±4 covers seed+trunk; ±5-6 are tail (<10% sensitivity)
         )
 
         enhancement_reports: dict[str, list[EnhancementReport]] = {}
