@@ -36,8 +36,9 @@ _PENULTIMATE_MM_BONUS = 2.5  # kcal/mol additional penalty from deliberate
                               # penultimate mismatch (Ayyadevara et al., 2000)
 
 _RATIO_FLOOR = 1.0
-_RATIO_CAP = 100.0  # Empirical AS-RPA discrimination is typically 10-100× (Ye et al. 2019)
-                     # Boltzmann overestimates at high ΔΔG due to kinetic effects in RPA
+_RATIO_CAP = 100.0   # Hard ceiling — empirical AS-RPA rarely exceeds 100× (Ye et al. 2019)
+_EMPIRICAL_SCALE = 0.50  # Damping factor: maps Boltzmann → empirical range (10-100×)
+                          # Accounts for kinetic effects in RPA that reduce thermodynamic selectivity
 
 # ---------------------------------------------------------------------------
 # Terminal mismatch penalty table (primer 3' base : WT template base)
@@ -150,8 +151,12 @@ def compute_asrpa_discrimination(
     if has_penultimate_mm:
         ddg += _PENULTIMATE_MM_BONUS
 
-    # Boltzmann discrimination ratio: exp(DDG / RT)
-    ratio = math.exp(ddg / _RT_37C)
+    # Empirically-damped Boltzmann ratio: exp(scale * DDG / RT)
+    # Pure Boltzmann overestimates because RPA strand exchange kinetics
+    # partially compensate for terminal mismatches. The damping factor (0.40)
+    # maps theoretical ratios (~100-30000×) to the empirical range (~10-100×)
+    # observed in AS-RPA experiments (Ye et al. 2019, Li et al. 2019).
+    ratio = math.exp(_EMPIRICAL_SCALE * ddg / _RT_37C)
     ratio = max(_RATIO_FLOOR, min(_RATIO_CAP, ratio))
 
     block_class = _classify_block(ddg)
@@ -235,7 +240,7 @@ def optimize_penultimate_mismatch(
             (original_penult, sub_base), _PENULTIMATE_MM_BONUS
         )
         total = terminal_ddg + pen_ddg
-        ratio = math.exp(total / _RT_37C)
+        ratio = math.exp(_EMPIRICAL_SCALE * total / _RT_37C)
         ratio = max(_RATIO_FLOOR, min(_RATIO_CAP, ratio))
 
         candidates.append({
@@ -251,7 +256,7 @@ def optimize_penultimate_mismatch(
         "substitution": original_penult,
         "penultimate_ddg": 0.0,
         "total_ddg": round(terminal_ddg, 2),
-        "disc_ratio": round(max(_RATIO_FLOOR, min(_RATIO_CAP, math.exp(terminal_ddg / _RT_37C))), 1),
+        "disc_ratio": round(max(_RATIO_FLOOR, min(_RATIO_CAP, math.exp(_EMPIRICAL_SCALE * terminal_ddg / _RT_37C))), 1),
         "block_class": _classify_block(terminal_ddg),
     }
 

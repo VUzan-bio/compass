@@ -528,6 +528,31 @@ function transformApiCandidate(c) {
       experimentalPriority: c.experimental_priority ?? null,
       riskProfile: c.risk_profile ?? null,
       priorityReason: c.priority_reason ?? null,
+      // Phase 1 — newly exposed backend fields
+      seedPositionScore: sc.seed_position_score ?? null,
+      gcPenalty: sc.gc_penalty ?? null,
+      structurePenalty: sc.structure_penalty ?? null,
+      homopolymerPenalty: sc.homopolymer_penalty ?? null,
+      offtargetPenalty: sc.offtarget_penalty ?? null,
+      proximityBonus: sc.proximity_bonus ?? null,
+      mfe: sc.mfe ?? null,
+      thermoDdg: sc.thermo_ddg ?? null,
+      cumulativeDg: sc.cumulative_dg ?? null,
+      localDg: sc.local_dg ?? null,
+      pamDisrupted: sc.pam_disrupted ?? null,
+      pamDisruptionType: sc.pam_disruption_type ?? null,
+      offtargetHits: sc.offtarget_hits ?? null,
+      offtargetIsClean: sc.offtarget_is_clean ?? null,
+      discConfidence: sc.disc_confidence ?? null,
+      discFeatureVector: sc.disc_feature_vector ?? null,
+      discModelName: sc.disc_model_name ?? null,
+      mlConfidence: sc.ml_confidence ?? null,
+      mismatchType: sc.mismatch_type ?? null,
+      refBaseAtMutation: sc.ref_base_at_mutation ?? null,
+      fwdTm: c.fwd_tm ?? null, revTm: c.rev_tm ?? null,
+      fwdGc: c.fwd_gc ?? null, revGc: c.rev_gc ?? null,
+      primerDimerDg: c.primer_dimer_dg ?? null,
+      ampliconSeq: c.amplicon_seq ?? null,
     };
   }
   /* Original detailed per-candidate shape */
@@ -697,7 +722,7 @@ const CandidateViewer = ({ r, onClose }) => {
             ...(r.pamAdjusted != null && r.pamPenalty != null && r.pamPenalty < 1.0 ? [{ l: "PAM-adjusted", v: `${r.pamAdjusted.toFixed(3)} (${r.pamPenalty}×)`, c: T.textSec }] : []),
             { l: r.strategy === "Proximity" ? "Disc (AS-RPA)" : "Discrimination", v: r.strategy === "Proximity" ? (r.asrpaDiscrimination ? (r.asrpaDiscrimination.block_class === "none" ? "1× (no mismatch)" : `${r.asrpaDiscrimination.disc_ratio >= 100 ? "≥100" : r.asrpaDiscrimination.disc_ratio.toFixed(0)}× ${r.asrpaDiscrimination.terminal_mismatch}`) : "AS-RPA") : r.gene === "IS6110" ? "N/A (control)" : `${typeof r.disc === "number" ? r.disc.toFixed(1) : r.disc}×`, c: r.strategy === "Proximity" ? (r.asrpaDiscrimination?.block_class === "none" ? T.danger : T.purple) : r.gene === "IS6110" ? T.textTer : discColor },
             ...(r.strategy === "Proximity" && r.proximityDistance ? [{ l: "Distance", v: `${r.proximityDistance} bp`, c: T.purple }] : []),
-            { l: "Activity QC", v: r.activityQc != null ? r.activityQc.toFixed(3) : r.score.toFixed(3), c: T.textTer },
+            { l: "Activity QC", v: r.activityQc != null ? r.activityQc.toFixed(3) : (r.score ?? 0).toFixed(3), c: T.textTer },
             ...(r.discriminationQc != null ? [{ l: "Disc QC", v: r.discriminationQc.toFixed(3), c: r.discriminationQc > 0.6 ? T.success : r.discriminationQc > 0.3 ? T.warning : T.danger }] : []),
             { l: "GC%", v: `${(r.gc * 100).toFixed(0)}%`, c: T.text },
             { l: "Off-targets", v: r.ot, c: r.ot === 0 ? T.success : T.warning },
@@ -823,7 +848,7 @@ const CandidateViewer = ({ r, onClose }) => {
             <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "10px", padding: "10px 14px", background: T.bgSub }}>
               <span style={{ fontSize: "11px", fontWeight: 600, color: T.textSec }}>Composite Score</span>
               <span style={{ fontFamily: FONT, fontSize: "14px", fontWeight: 600, color: T.text }}>{compositeCalc.toFixed(3)}</span>
-              <span style={{ fontSize: "10px", color: T.textTer }}>(actual: {r.score.toFixed(3)})</span>
+              <span style={{ fontSize: "10px", color: T.textTer }}>(actual: {(r.score ?? 0).toFixed(3)})</span>
             </div>
           </div>
         </div>
@@ -939,7 +964,7 @@ const Sidebar = ({ page, setPage, connected, mobileOpen, setMobileOpen, collapse
                   borderRadius: "4px", border: "none", cursor: "pointer", fontFamily: FONT, fontSize: "13px",
                   fontWeight: active ? 500 : 400, background: active ? T.sidebarActive : "transparent",
                   color: active ? T.primary : T.sidebarText, marginBottom: "2px",
-                  borderLeft: active && !isCollapsed ? `2px solid ${T.primary}` : "2px solid transparent",
+                  borderLeft: "2px solid transparent",
                   transition: "background 120ms ease-out, color 120ms ease-out, border-color 120ms ease-out",
                 }}>
                   <it.icon size={16} strokeWidth={active ? 2 : 1.5} />
@@ -2784,8 +2809,9 @@ const InSilicoCaveat = () => {
   );
 };
 
-const OverviewTab = ({ results, scorer, jobId }) => {
+const OverviewTab = ({ results, scorer, jobId, panelData }) => {
   const mobile = useIsMobile();
+  const [glossaryOpen, setGlossaryOpen] = useState(false);
 
   // Detect scorer from prop (primary) or ml_scores (fallback)
   const usesCompassMl = scorer === "compass_ml" || results.some(r => r.mlScores?.some(m => (m.model_name || m.modelName) === "compass_ml"));
@@ -2798,6 +2824,9 @@ const OverviewTab = ({ results, scorer, jobId }) => {
   const withPrimers = results.filter((r) => r.hasPrimers).length;
   const directResults = results.filter((r) => r.strategy === "Direct" && r.disc < 900);
   const avgDisc = directResults.length ? +(directResults.reduce((a, r) => a + r.disc, 0) / directResults.length).toFixed(1) : 0;
+  // Separate direct (excl. IS6110) vs proximity discrimination
+  const directNonIS = directResults.filter(r => r.gene !== "IS6110");
+  const avgDiscDirect = directNonIS.length ? +(directNonIS.reduce((a, r) => a + r.disc, 0) / directNonIS.length).toFixed(1) : 0;
   const highDisc = directResults.filter((r) => r.disc >= 3).length;
   const directCount = results.filter((r) => r.strategy === "Direct").length;
   const proximityCount = results.filter((r) => r.strategy === "Proximity").length;
@@ -2809,6 +2838,11 @@ const OverviewTab = ({ results, scorer, jobId }) => {
   const pamAdjResults = results.filter(r => r.pamAdjusted != null);
   const avgPamAdj = pamAdjResults.length ? +(pamAdjResults.reduce((a, r) => a + r.pamAdjusted, 0) / pamAdjResults.length).toFixed(3) : null;
   const avgScore = avgActivity; // alias for scatter plot
+
+  const DRUG_PREVALENCE = {
+    RIF: "~85%", INH: "~85%", EMB: "~45%", PZA: "~40%",
+    FQ: "~40%", AG: "~90%", OTHER: "N/A"
+  };
 
   // Model agreement — Spearman ρ between heuristic and Compass-ML (PAM-adjusted)
   const modelAgreement = (() => {
@@ -2837,6 +2871,32 @@ const OverviewTab = ({ results, scorer, jobId }) => {
 
   return (
     <div>
+      {/* Panel Interpretation — blue card with collapsible glossary */}
+      <div style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: "6px", padding: "16px 20px", marginBottom: "20px" }}>
+        <div style={{ fontSize: "13px", fontWeight: 600, color: "#1D4ED8", marginBottom: "6px" }}>Panel Interpretation</div>
+        <div style={{ fontSize: "12px", color: "#1E40AF", lineHeight: 1.6 }}>
+          {assayReady}/{totalTargets} targets are assay-ready across {drugs.filter(d => d !== "OTHER").length} drug classes ({drugs.filter(d => d !== "OTHER").join(", ")}). {belowThreshold.length > 0 ? `${belowThreshold.length} below threshold \u2014 prioritised for first experimental round.` : "All targets meet readiness threshold."}
+        </div>
+        {/* Collapsible glossary */}
+        <div style={{ marginTop: "10px" }}>
+          <button onClick={() => setGlossaryOpen(!glossaryOpen)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: "11px", fontWeight: 600, color: "#2563EB", display: "flex", alignItems: "center", gap: "4px" }}>
+            {glossaryOpen ? "\u25BC" : "\u25B6"} Metric definitions
+          </button>
+          {glossaryOpen && (
+            <div style={{ marginTop: "8px", fontSize: "11px", color: "#1E3A5F", lineHeight: 1.7, paddingLeft: "12px", borderLeft: "2px solid #BFDBFE" }}>
+              <div style={{ marginBottom: "4px" }}><strong>Direct avg ({avgDiscDirect}×)</strong> — Mean Cas12a mismatch discrimination for direct-detection candidates (MUT/WT cleavage fold-difference).</div>
+              <div style={{ marginBottom: "4px" }}><strong>Proximity (AS-RPA)</strong> — Allele-specific RPA primer discrimination for candidates where the mutation falls outside the crRNA footprint. Estimated 11–100× selectivity.</div>
+              <div style={{ marginBottom: "4px" }}><strong>Diagnostic-grade (≥3×)</strong> — Number of direct candidates exceeding the 3× threshold for reliable clinical use on electrochemical or lateral-flow readout.</div>
+              <div style={{ marginBottom: "4px" }}><strong>Avg. activity ({avgActivity})</strong> — Compass-ML predicted Cas12a on-target cis-cleavage efficiency (0–1). Higher = stronger trans-cleavage signal.</div>
+              <div style={{ marginBottom: "4px" }}><strong>Avg. PAM-adjusted ({avgPamAdj || "—"})</strong> — Activity × PAM penalty. Predicts actual signal strength on the electrode after non-canonical PAM penalties (enAsCas12a expanded PAMs in GC-rich MTB).</div>
+              <div><strong>Disc model</strong> — XGBoost on 18 thermodynamic features (trained on 6,136 EasyDesign crRNA–target pairs). Predicts MUT/WT discrimination from mismatch position, type, and flanking sequence context.</div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <InSilicoCaveat />
+
       {/* ── Verdict-first panel ── */}
       <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: "4px", padding: mobile ? "20px 16px" : "24px 28px", marginBottom: "24px" }}>
         {/* Headline verdict */}
@@ -2861,10 +2921,19 @@ const OverviewTab = ({ results, scorer, jobId }) => {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: T.textSec }}>
                   <TrendingUp size={12} color={T.textTer} strokeWidth={1.8} />
-                  Avg discrimination
+                  Direct avg
                 </span>
-                <span style={{ fontSize: "20px", fontWeight: 600, color: T.text, fontFamily: FONT }}>{avgDisc}×</span>
+                <span style={{ fontSize: "20px", fontWeight: 600, color: T.text, fontFamily: FONT }}>{avgDiscDirect}×</span>
               </div>
+              {proximityCount > 0 && (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: T.textSec }}>
+                    <GitBranch size={12} color={T.purple} strokeWidth={1.8} />
+                    Proximity
+                  </span>
+                  <span style={{ fontSize: "14px", fontWeight: 600, color: T.purple, fontFamily: FONT }}>AS-RPA (≥100× est.)</span>
+                </div>
+              )}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: T.textSec }}>
                   <Filter size={12} color={T.textTer} strokeWidth={1.8} />
@@ -2980,44 +3049,56 @@ const OverviewTab = ({ results, scorer, jobId }) => {
         </div>
       </div>
 
-      {/* ── Interpretation box ── */}
-      <div style={{ background: T.primaryLight, border: `1px solid ${T.primary}25`, borderRadius: "4px", padding: mobile ? "16px" : "18px 24px", marginBottom: "24px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
-          <Brain size={16} color={T.primary} strokeWidth={1.8} />
-          <span style={{ fontSize: "13px", fontWeight: 600, color: T.primaryDark, fontFamily: HEADING }}>Panel Interpretation</span>
+      {/* ── Drug Coverage table (promoted to position 2) ── */}
+      <FigureSection title="Drug Coverage">
+      <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: "4px", overflow: "hidden" }}>
+        <div style={{ padding: "16px 24px", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+          <div style={{ fontSize: "14px", fontWeight: 600, color: T.text, fontFamily: HEADING }}>Drug Coverage</div>
+          <div style={{ fontSize: "12px", color: T.textTer }}>{drugs.length} classes</div>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "6px", fontSize: "13px", color: T.primaryDark, lineHeight: 1.6 }}>
-          <div><strong>{assayReady}/{totalTargets} targets are assay-ready</strong> across {drugs.length} drug classes ({drugs.join(", ")}). {directCount} use direct crRNA discrimination, {proximityCount} rely on AS-RPA primer selectivity for allelic specificity.</div>
-          <div>
-            {avgActivity >= 0.8
-              ? `Mean predicted activity of ${avgActivity} indicates strong Cas12a cis-cleavage efficiency, predicting robust trans-cleavage activation and detectable SWV peak reduction on LIG electrodes. Activity range ${minScore}\u2013${maxScore} suggests consistent signal across the panel.`
-              : avgActivity >= 0.6
-              ? `Mean predicted activity of ${avgActivity} is moderate. On the electrochemical platform, weaker candidates may require extended incubation (>30 min) or increased Cas12a concentration to reach the 3\u03c3 detection threshold on MB-ssDNA reporters.`
-              : `Mean predicted activity of ${avgActivity} reflects the Compass-ML efficiency prediction (trained on Kim 2018, human cell cis-cleavage). Scores below 0.6 indicate predicted activity in the lower range \u2014 however, the ranking between candidates remains informative for synthesis prioritisation. Actual trans-cleavage efficiency on the LIG electrode will differ and requires experimental measurement.`
-            }
-            {avgPamAdj != null && avgPamAdj < avgActivity * 0.85 ? ` PAM-adjusted average (${avgPamAdj}) reflects enAsCas12a activity penalties on non-canonical PAMs (Kleinstiver et al. 2019). Canonical TTTV candidates retain full predicted activity; expanded PAMs (TTCV, TATV, CTTV) are penalised 35\u201375%.` : ""}
-          </div>
-          <div>
-            {highDisc >= directCount * 0.8
-              ? `${highDisc}/${directResults.length} direct candidates exceed the 3\u00d7 diagnostic-grade threshold (avg ${avgDisc}\u00d7, predicted by XGBoost on 18 thermodynamic features). At these ratios, the MUT electrochemical signal is clearly resolvable from WT on both SWV and lateral-flow readouts. Panel is well-suited for single-nucleotide resistance genotyping.`
-              : highDisc >= directCount * 0.5
-              ? `${highDisc}/${directResults.length} direct candidates meet diagnostic-grade discrimination (\u22653\u00d7). Targets below threshold should be prioritised for synthetic mismatch enhancement (seed positions 2\u20136) to improve WT suppression before electrode validation.`
-              : `Only ${highDisc}/${directResults.length} direct candidates reach diagnostic-grade discrimination. Synthetic mismatch enhancement (Kohabir et al. 2024) at seed positions 2\u20136 is recommended. Alternatively, these targets may perform better as proximity candidates with AS-RPA primer selectivity.`
-            }
-          </div>
-          {(missingPrimers.length > 0 || belowThreshold.length > 0) && (
-            <div>
-              {missingPrimers.length > 0 ? `${missingPrimers.length} target${missingPrimers.length > 1 ? "s" : ""} lack RPA primers \u2014 these cannot be amplified and are not deployable. ` : ""}
-              {belowThreshold.length > 0 ? `${belowThreshold.length} target${belowThreshold.length > 1 ? "s" : ""} fall below readiness threshold (${belowThreshold.map(r => r.label).join(", ")}). These should still be synthesised for experimental validation \u2014 in silico readiness scores are conservative estimates. Prioritise these for the first round of electrode characterisation to calibrate the model.` : ""}
-            </div>
-          )}
-          {withPrimers === totalTargets && belowThreshold.length === 0 && (
-            <div style={{ color: T.success }}><strong>All {totalTargets} targets have primers and pass readiness threshold.</strong> Panel is ready for experimental validation on the LIG electrode array.</div>
-          )}
+        <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+          <thead>
+            <tr>
+              {["Drug", "Candidates", "Avg Score", "Avg Disc (Direct)", "Primers", "Coverage"].map((h) => (
+                <th key={h} style={{ padding: "10px 24px", textAlign: "left", fontWeight: 600, color: T.textTer, fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: `1px solid ${T.border}` }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {byDrug.map((d) => {
+              const rows = results.filter((r) => r.drug === d.drug);
+              const primerCount = rows.filter((r) => r.hasPrimers).length;
+              return (
+                <tr key={d.drug} style={{ borderBottom: `1px solid ${T.borderLight}` }}>
+                  <td style={{ padding: "12px 24px" }}><DrugBadge drug={d.drug} /></td>
+                  <td style={{ padding: "12px 24px", fontFamily: FONT, fontWeight: 600 }}>{d.count}</td>
+                  <td style={{ padding: "12px 24px", fontFamily: FONT, color: d.avgScore > 0.75 ? T.success : d.avgScore > 0.6 ? T.text : T.warning }}>{d.avgScore}</td>
+                  {(() => {
+                    const directRows = rows.filter(r => r.strategy === "Direct" && r.disc > 0 && r.disc < 900);
+                    const proxCount = rows.filter(r => r.strategy === "Proximity").length;
+                    if (directRows.length > 0) {
+                      const avg = (directRows.reduce((a, r) => a + r.disc, 0) / directRows.length).toFixed(1);
+                      return <td style={{ padding: "12px 24px", fontFamily: FONT }}>{avg}×<span style={{ fontSize: "9px", color: T.textTer, marginLeft: "3px" }}>({directRows.length})</span>{proxCount > 0 && <span style={{ fontSize: "9px", color: T.textTer, marginLeft: "4px" }}>+{proxCount} AS-RPA</span>}</td>;
+                    }
+                    return <td style={{ padding: "12px 24px", fontSize: "10px", color: T.purple, fontWeight: 600 }}>AS-RPA only</td>;
+                  })()}
+                  <td style={{ padding: "12px 24px" }}>
+                    <span style={{ fontFamily: FONT, fontWeight: 600 }}>{primerCount}/{d.count}</span>
+                    {primerCount < d.count && <span style={{ marginLeft: "6px", fontSize: "10px", color: T.warning, fontWeight: 600 }}>{d.count - primerCount} missing</span>}
+                  </td>
+                  <td style={{ padding: "12px 24px", fontFamily: FONT, fontWeight: 600, color: T.textSec }}>{DRUG_PREVALENCE[d.drug] || "\u2014"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        </div>
+        <div style={{ padding: "10px 24px", fontSize: "10px", color: T.textTer, lineHeight: 1.6, borderTop: `1px solid ${T.borderLight}` }}>
+          Estimated resistance coverage from WHO mutation catalogue (2021). Actual coverage varies by geography and population.
         </div>
       </div>
-
-      <InSilicoCaveat />
+      </FigureSection>
 
       {/* Risk Assessment Matrix */}
       {results.some(r => r.riskProfile != null) && (
@@ -3026,17 +3107,44 @@ const OverviewTab = ({ results, scorer, jobId }) => {
         </FigureSection>
       )}
 
-      {/* Diagnostic Readiness Score Chart */}
-      <FigureSection title="Diagnostic Readiness Score" subtitle="Each line is one candidate across 5 readiness axes. Strong candidates stay high. Colored by drug class.">
-        <ReadinessChart results={results} />
-      </FigureSection>
-
-      {/* UMAP Embedding Space */}
-      {jobId && (
-        <FigureSection title="Candidate Embedding Space">
-          <UMAPPanel jobId={jobId} />
-        </FigureSection>
-      )}
+      {/* ── Readiness Bar Chart (replaces parallel coordinates) ── */}
+      {(() => {
+        const readinessData = results.filter(r => r.readinessScore != null)
+          .map(r => ({ label: r.label, drug: r.drug, score: r.readinessScore }))
+          .sort((a, b) => b.score - a.score);
+        if (readinessData.length === 0) return null;
+        return (
+          <FigureSection title="Diagnostic Readiness Score" subtitle="Candidates ranked by composite readiness score. Colored by drug class.">
+            <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: "4px", padding: mobile ? "16px" : "20px 24px" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                {readinessData.map((r, i) => {
+                  const pct = Math.round(r.score * 100);
+                  const rs = r.score;
+                  const barColor = rs >= 0.7 ? "#16a34a" : rs >= 0.55 ? "#65a30d" : rs >= 0.4 ? "#d97706" : "#dc2626";
+                  return (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <div style={{ width: mobile ? "80px" : "120px", fontSize: "11px", fontFamily: MONO, color: T.text, textAlign: "right", flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.label}</div>
+                      <div style={{ flex: 1, height: "18px", background: T.bgSub, borderRadius: "3px", overflow: "hidden", position: "relative" }}>
+                        <div style={{ width: `${pct}%`, height: "100%", background: barColor, borderRadius: "3px", transition: "width 300ms ease-out", opacity: 0.85 }} />
+                      </div>
+                      <div style={{ width: "36px", fontSize: "11px", fontFamily: FONT, fontWeight: 600, color: r.score >= 0.4 ? T.success : T.warning, textAlign: "right", flexShrink: 0 }}>{pct}%</div>
+                    </div>
+                  );
+                })}
+              </div>
+              {/* Drug color legend */}
+              <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "14px", flexWrap: "wrap" }}>
+                {Object.entries(DRUG_CANVAS).filter(([d]) => d !== "OTHER" && readinessData.some(r => r.drug === d)).map(([drug, color]) => (
+                  <div key={drug} style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                    <div style={{ width: 10, height: 10, borderRadius: "2px", background: color, opacity: 0.85 }} />
+                    <span style={{ fontSize: "10px", color: T.textTer, fontWeight: 600 }}>{drug}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </FigureSection>
+        );
+      })()}
 
       {/* Score vs Discrimination Scatter — readiness-sized dots */}
       {!mobile && (() => {
@@ -3147,144 +3255,132 @@ const OverviewTab = ({ results, scorer, jobId }) => {
         );
       })()}
 
-      {/* Heuristic vs Compass-ML Scatter */}
-      {!mobile && usesCompassMl && avgCNN != null && (() => {
-        const scatterData = results.filter(r => r.cnnCalibrated != null).map(r => ({
-          heuristic: r.score, narsilMl: r.cnnCalibrated, pamAdj: r.pamAdjusted ?? r.cnnCalibrated,
-          label: r.label, drug: r.drug,
-        }));
-        const agreePct = (() => {
-          const above = (v) => v >= 0.5;
-          const agree = scatterData.filter(d => above(d.heuristic) === above(d.narsilMl)).length;
-          return scatterData.length ? Math.round(agree / scatterData.length * 100) : 0;
-        })();
-        return (
-          <FigureSection title="Scoring Model Comparison">
-          <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: "4px", padding: "28px 32px", marginBottom: "0" }}>
-            <div style={{ marginBottom: "16px", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <div>
-                <div style={{ fontSize: "14px", fontWeight: 600, color: T.text, fontFamily: HEADING }}>Scoring Model Comparison</div>
-                <div style={{ fontSize: "11px", color: T.textSec, marginTop: "3px", lineHeight: 1.5 }}>
-                  Biophysical QC (x) vs Compass-ML activity (y) per candidate. Points near the diagonal indicate model agreement.
-                  Candidates above the line have higher activity than their QC score suggests; below indicates biophysical concerns.
-                </div>
+      {/* ── Model Validation (collapsed: Model Card + UMAP + Scoring Comparison) ── */}
+      <CollapsibleSection title="Model Validation" defaultOpen={false}>
+        {/* Model Card */}
+        {(() => {
+          const cal = panelData?.calibration ?? null;
+          return (
+            <div style={{ background: T.bgSub, border: `1px solid ${T.border}`, borderRadius: "4px", padding: mobile ? "14px" : "16px 20px", marginBottom: "16px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "10px", fontWeight: 600, color: T.textTer, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "10px" }}>
+                <Cpu size={11} color={T.textTer} strokeWidth={2} />
+                Model Card
               </div>
-              <div style={{ textAlign: "right", flexShrink: 0, marginLeft: "20px" }}>
-                <div style={{ display: "flex", gap: "16px" }}>
-                  <div><div style={{ fontSize: "9px", color: T.textTer, fontWeight: 600 }}>AGREEMENT</div><div style={{ fontSize: "13px", fontWeight: 600, color: T.primary, fontFamily: FONT }}>{agreePct}%</div></div>
-                  {modelAgreement != null && <div><div style={{ fontSize: "9px", color: T.textTer, fontWeight: 600 }}>SPEARMAN</div><div style={{ fontSize: "13px", fontWeight: 600, color: T.text, fontFamily: FONT }}>{modelAgreement}</div></div>}
-                  <div><div style={{ fontSize: "9px", color: T.textTer, fontWeight: 600 }}>AVG QC</div><div style={{ fontSize: "13px", fontWeight: 600, color: T.text, fontFamily: FONT }}>{avgScore}</div></div>
-                  <div><div style={{ fontSize: "9px", color: T.textTer, fontWeight: 600 }}>AVG ACTIVITY</div><div style={{ fontSize: "13px", fontWeight: 600, color: T.primary, fontFamily: FONT }}>{avgCNN}</div></div>
-                </div>
+              <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr 1fr" : "1fr 1fr 1fr 1fr", gap: "8px" }}>
+                {[
+                  { l: "Validation \u03c1", v: cal?.val_rho != null ? (+cal.val_rho).toFixed(4) : "\u2014" },
+                  { l: "Calibration T", v: cal?.temperature != null ? (+cal.temperature).toFixed(2) : "\u2014" },
+                  { l: "Calibration \u03b1", v: cal?.alpha != null ? (+cal.alpha).toFixed(4) : "\u2014" },
+                  { l: "Model params", v: cal?.model_params ?? "234K" },
+                ].map(s => (
+                  <div key={s.l} style={{ background: T.bg, border: `1px solid ${T.borderLight}`, borderRadius: "4px", padding: "8px 12px" }}>
+                    <div style={{ fontSize: "9px", fontWeight: 600, color: T.textTer, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "3px" }}>{s.l}</div>
+                    <div style={{ fontSize: "13px", fontWeight: 600, color: T.text, fontFamily: MONO }}>{s.v}</div>
+                  </div>
+                ))}
               </div>
             </div>
-            <div style={{ borderRadius: 4, padding: "12px 8px 4px 0" }}>
-            <ResponsiveContainer width="100%" height={340}>
-              <ScatterChart margin={{ top: 10, right: 20, bottom: 25, left: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
-                <XAxis type="number" dataKey="heuristic" name="Biophysical QC" domain={[0, 1]} tick={{ fontSize: 10, fontFamily: FONT, fill: CHART_TEXT_SEC }} label={{ value: "Biophysical QC (heuristic)", position: "insideBottom", offset: -12, fontSize: 11, fill: CHART_TEXT }} />
-                <YAxis type="number" dataKey="narsilMl" name="Activity" domain={[0, 1]} tick={{ fontSize: 10, fontFamily: FONT, fill: CHART_TEXT_SEC }} label={{ value: "Activity (Compass-ML)", angle: -90, position: "insideLeft", offset: 10, fontSize: 11, fill: CHART_TEXT }} />
-                <Tooltip content={({ payload }) => {
-                  if (!payload?.length) return null;
-                  const d = payload[0]?.payload;
-                  if (!d) return null;
-                  const diff = d.narsilMl - d.heuristic;
-                  return (
-                    <div style={{ ...tooltipStyle, padding: "12px 16px" }}>
-                      <div style={{ fontWeight: 600, fontSize: "12px", color: gradientColor(d.narsilMl), marginBottom: "4px" }}>{d.label}</div>
-                      <div style={{ fontSize: "11px", color: T.textSec }}>Activity: <strong style={{ color: T.primary }}>{d.narsilMl.toFixed(3)}</strong></div>
-                      <div style={{ fontSize: "11px", color: T.textSec }}>PAM-adjusted: <strong style={{ color: T.text }}>{d.pamAdj.toFixed(3)}</strong></div>
-                      <div style={{ fontSize: "11px", color: T.textSec }}>QC (heuristic): <strong style={{ color: T.textTer }}>{d.heuristic.toFixed(3)}</strong></div>
-                      <div style={{ fontSize: "11px", color: diff > 0.05 ? T.success : diff < -0.05 ? T.warning : T.textTer, marginTop: "2px" }}>
-                        {"\u0394"} = {diff > 0 ? "+" : ""}{diff.toFixed(3)} ({diff > 0.05 ? "Net scores higher" : diff < -0.05 ? "Heuristic scores higher" : "Models agree"})
-                      </div>
-                    </div>
-                  );
-                }} />
-                <ReferenceLine segment={[{ x: 0, y: 0 }, { x: 1, y: 1 }]} stroke="#333333" strokeDasharray="6 4" strokeWidth={1} opacity={0.6} />
-                <Scatter data={scatterData} isAnimationActive={false}>
-                  {scatterData.map((entry, i) => (
-                    <Cell key={i} fill={gradientColor(entry.narsilMl)} r={7} stroke="rgba(0,0,0,0.1)" strokeWidth={1} opacity={0.85} />
-                  ))}
-                </Scatter>
-              </ScatterChart>
-            </ResponsiveContainer>
-            </div>
-            {/* Legend */}
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "8px", flexWrap: "wrap" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <span style={{ fontSize: "10px", color: T.textTer }}>Low</span>
-                <div style={{ width: 120, height: 8, borderRadius: 4, background: gradientCSS }} />
-                <span style={{ fontSize: "10px", color: T.textTer }}>High activity</span>
-              </div>
-              <span style={{ fontSize: "10px", color: T.textTer }}>|</span>
-              <span style={{ fontSize: "10px", color: T.textTer }}>Dashed line = perfect agreement (y = x)</span>
-            </div>
-            {/* Interpretation */}
-            {(() => {
-              const aboveLine = scatterData.filter(d => d.narsilMl > d.heuristic + 0.05);
-              const belowLine = scatterData.filter(d => d.heuristic > d.narsilMl + 0.05);
-              const onLine = scatterData.length - aboveLine.length - belowLine.length;
-              return (
-                <div style={{ marginTop: "14px", padding: "12px 16px", background: T.primaryLight, border: `1px solid ${T.primary}33`, borderRadius: "4px", fontSize: "11px", color: T.textSec, lineHeight: 1.7 }}>
-                  <strong style={{ color: T.primary }}>Interpretation:</strong> {agreePct}% of candidates are classified the same way by both models (above/below 0.5 threshold). {onLine}/{scatterData.length} score within ±0.05 of each other.
-                  {aboveLine.length > 0 ? ` Compass-ML scores ${aboveLine.length} candidate${aboveLine.length > 1 ? "s" : ""} higher (${aboveLine.slice(0, 2).map(d => d.label).join(", ")}${aboveLine.length > 2 ? "\u2026" : ""}).` : ""}
-                  {belowLine.length > 0 ? ` Heuristic scores ${belowLine.length} candidate${belowLine.length > 1 ? "s" : ""} higher (${belowLine.slice(0, 2).map(d => d.label).join(", ")}${belowLine.length > 2 ? "\u2026" : ""}).` : ""}
-                  {modelAgreement != null ? ` Rank correlation \u03c1 = ${modelAgreement} \u2014 ${modelAgreement >= 0.7 ? "strong agreement, QC corroborates activity predictions" : modelAgreement >= 0.4 ? "moderate agreement, QC catches biophysical edge cases activity model misses" : "weak agreement, models measure different things \u2014 QC serves as independent sanity check"}.` : ""}
-                </div>
-              );
-            })()}
-          </div>
-          </FigureSection>
-        );
-      })()}
+          );
+        })()}
 
-      {/* Drug coverage table */}
-      <FigureSection title="Drug Coverage">
-      <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: "4px", overflow: "hidden" }}>
-        <div style={{ padding: "16px 24px", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-          <div style={{ fontSize: "14px", fontWeight: 600, color: T.text, fontFamily: HEADING }}>Drug Coverage</div>
-          <div style={{ fontSize: "12px", color: T.textTer }}>{drugs.length} classes</div>
-        </div>
-        <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
-          <thead>
-            <tr>
-              {["Drug", "Candidates", "Avg Score", "Avg Disc (Direct)", "Primers"].map((h) => (
-                <th key={h} style={{ padding: "10px 24px", textAlign: "left", fontWeight: 600, color: T.textTer, fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: `1px solid ${T.border}` }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {byDrug.map((d) => {
-              const rows = results.filter((r) => r.drug === d.drug);
-              const primerCount = rows.filter((r) => r.hasPrimers).length;
-              return (
-                <tr key={d.drug} style={{ borderBottom: `1px solid ${T.borderLight}` }}>
-                  <td style={{ padding: "12px 24px" }}><DrugBadge drug={d.drug} /></td>
-                  <td style={{ padding: "12px 24px", fontFamily: FONT, fontWeight: 600 }}>{d.count}</td>
-                  <td style={{ padding: "12px 24px", fontFamily: FONT, color: d.avgScore > 0.75 ? T.success : d.avgScore > 0.6 ? T.text : T.warning }}>{d.avgScore}</td>
-                  {(() => {
-                    const directRows = rows.filter(r => r.strategy === "Direct" && r.disc > 0 && r.disc < 900);
-                    const proxCount = rows.filter(r => r.strategy === "Proximity").length;
-                    if (directRows.length > 0) {
-                      const avg = (directRows.reduce((a, r) => a + r.disc, 0) / directRows.length).toFixed(1);
-                      return <td style={{ padding: "12px 24px", fontFamily: FONT }}>{avg}×<span style={{ fontSize: "9px", color: T.textTer, marginLeft: "3px" }}>({directRows.length})</span>{proxCount > 0 && <span style={{ fontSize: "9px", color: T.textTer, marginLeft: "4px" }}>+{proxCount} AS-RPA</span>}</td>;
-                    }
-                    return <td style={{ padding: "12px 24px", fontSize: "10px", color: T.purple, fontWeight: 600 }}>AS-RPA only</td>;
-                  })()}
-                  <td style={{ padding: "12px 24px" }}>
-                    <span style={{ fontFamily: FONT, fontWeight: 600 }}>{primerCount}/{d.count}</span>
-                    {primerCount < d.count && <span style={{ marginLeft: "6px", fontSize: "10px", color: T.warning, fontWeight: 600 }}>{d.count - primerCount} missing</span>}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        </div>
-      </div>
-      </FigureSection>
+        {/* UMAP Embedding Space */}
+        {jobId && (
+          <div style={{ marginBottom: "16px" }}>
+            <div style={{ fontSize: "14px", fontWeight: 600, color: T.text, fontFamily: HEADING, marginBottom: "8px" }}>Candidate Embedding Space</div>
+            <UMAPPanel jobId={jobId} />
+          </div>
+        )}
+
+        {/* Scoring Model Comparison */}
+        {!mobile && usesCompassMl && avgCNN != null && (() => {
+          const scatterData = results.filter(r => r.cnnCalibrated != null).map(r => ({
+            heuristic: r.score, narsilMl: r.cnnCalibrated, pamAdj: r.pamAdjusted ?? r.cnnCalibrated,
+            label: r.label, drug: r.drug,
+          }));
+          const agreePct = (() => {
+            const above = (v) => v >= 0.5;
+            const agree = scatterData.filter(d => above(d.heuristic) === above(d.narsilMl)).length;
+            return scatterData.length ? Math.round(agree / scatterData.length * 100) : 0;
+          })();
+          return (
+            <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: "4px", padding: "28px 32px" }}>
+              <div style={{ marginBottom: "16px", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div>
+                  <div style={{ fontSize: "14px", fontWeight: 600, color: T.text, fontFamily: HEADING }}>Scoring Model Comparison</div>
+                  <div style={{ fontSize: "11px", color: T.textSec, marginTop: "3px", lineHeight: 1.5 }}>
+                    Biophysical QC (x) vs Compass-ML activity (y) per candidate. Points near the diagonal indicate model agreement.
+                    Candidates above the line have higher activity than their QC score suggests; below indicates biophysical concerns.
+                  </div>
+                </div>
+                <div style={{ textAlign: "right", flexShrink: 0, marginLeft: "20px" }}>
+                  <div style={{ display: "flex", gap: "16px" }}>
+                    <div><div style={{ fontSize: "9px", color: T.textTer, fontWeight: 600 }}>AGREEMENT</div><div style={{ fontSize: "13px", fontWeight: 600, color: T.primary, fontFamily: FONT }}>{agreePct}%</div></div>
+                    {modelAgreement != null && <div><div style={{ fontSize: "9px", color: T.textTer, fontWeight: 600 }}>SPEARMAN</div><div style={{ fontSize: "13px", fontWeight: 600, color: T.text, fontFamily: FONT }}>{modelAgreement}</div></div>}
+                    <div><div style={{ fontSize: "9px", color: T.textTer, fontWeight: 600 }}>AVG QC</div><div style={{ fontSize: "13px", fontWeight: 600, color: T.text, fontFamily: FONT }}>{avgScore}</div></div>
+                    <div><div style={{ fontSize: "9px", color: T.textTer, fontWeight: 600 }}>AVG ACTIVITY</div><div style={{ fontSize: "13px", fontWeight: 600, color: T.primary, fontFamily: FONT }}>{avgCNN}</div></div>
+                  </div>
+                </div>
+              </div>
+              <div style={{ borderRadius: 4, padding: "12px 8px 4px 0" }}>
+              <ResponsiveContainer width="100%" height={340}>
+                <ScatterChart margin={{ top: 10, right: 20, bottom: 25, left: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
+                  <XAxis type="number" dataKey="heuristic" name="Biophysical QC" domain={[0, 1]} tick={{ fontSize: 10, fontFamily: FONT, fill: CHART_TEXT_SEC }} label={{ value: "Biophysical QC (heuristic)", position: "insideBottom", offset: -12, fontSize: 11, fill: CHART_TEXT }} />
+                  <YAxis type="number" dataKey="narsilMl" name="Activity" domain={[0, 1]} tick={{ fontSize: 10, fontFamily: FONT, fill: CHART_TEXT_SEC }} label={{ value: "Activity (Compass-ML)", angle: -90, position: "insideLeft", offset: 10, fontSize: 11, fill: CHART_TEXT }} />
+                  <Tooltip content={({ payload }) => {
+                    if (!payload?.length) return null;
+                    const d = payload[0]?.payload;
+                    if (!d) return null;
+                    const diff = d.narsilMl - d.heuristic;
+                    return (
+                      <div style={{ ...tooltipStyle, padding: "12px 16px" }}>
+                        <div style={{ fontWeight: 600, fontSize: "12px", color: gradientColor(d.narsilMl), marginBottom: "4px" }}>{d.label}</div>
+                        <div style={{ fontSize: "11px", color: T.textSec }}>Activity: <strong style={{ color: T.primary }}>{d.narsilMl.toFixed(3)}</strong></div>
+                        <div style={{ fontSize: "11px", color: T.textSec }}>PAM-adjusted: <strong style={{ color: T.text }}>{d.pamAdj.toFixed(3)}</strong></div>
+                        <div style={{ fontSize: "11px", color: T.textSec }}>QC (heuristic): <strong style={{ color: T.textTer }}>{d.heuristic.toFixed(3)}</strong></div>
+                        <div style={{ fontSize: "11px", color: diff > 0.05 ? T.success : diff < -0.05 ? T.warning : T.textTer, marginTop: "2px" }}>
+                          {"\u0394"} = {diff > 0 ? "+" : ""}{diff.toFixed(3)} ({diff > 0.05 ? "Net scores higher" : diff < -0.05 ? "Heuristic scores higher" : "Models agree"})
+                        </div>
+                      </div>
+                    );
+                  }} />
+                  <ReferenceLine segment={[{ x: 0, y: 0 }, { x: 1, y: 1 }]} stroke="#333333" strokeDasharray="6 4" strokeWidth={1} opacity={0.6} />
+                  <Scatter data={scatterData} isAnimationActive={false}>
+                    {scatterData.map((entry, i) => (
+                      <Cell key={i} fill={gradientColor(entry.narsilMl)} r={7} stroke="rgba(0,0,0,0.1)" strokeWidth={1} opacity={0.85} />
+                    ))}
+                  </Scatter>
+                </ScatterChart>
+              </ResponsiveContainer>
+              </div>
+              {/* Legend */}
+              <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "8px", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span style={{ fontSize: "10px", color: T.textTer }}>Low</span>
+                  <div style={{ width: 120, height: 8, borderRadius: 4, background: gradientCSS }} />
+                  <span style={{ fontSize: "10px", color: T.textTer }}>High activity</span>
+                </div>
+                <span style={{ fontSize: "10px", color: T.textTer }}>|</span>
+                <span style={{ fontSize: "10px", color: T.textTer }}>Dashed line = perfect agreement (y = x)</span>
+              </div>
+              {/* Interpretation */}
+              {(() => {
+                const aboveLine = scatterData.filter(d => d.narsilMl > d.heuristic + 0.05);
+                const belowLine = scatterData.filter(d => d.heuristic > d.narsilMl + 0.05);
+                const onLine = scatterData.length - aboveLine.length - belowLine.length;
+                return (
+                  <div style={{ marginTop: "14px", padding: "12px 16px", background: T.primaryLight, border: `1px solid ${T.primary}33`, borderRadius: "4px", fontSize: "11px", color: T.textSec, lineHeight: 1.7 }}>
+                    <strong style={{ color: T.primary }}>Interpretation:</strong> {agreePct}% of candidates are classified the same way by both models (above/below 0.5 threshold). {onLine}/{scatterData.length} score within \u00b10.05 of each other.
+                    {aboveLine.length > 0 ? ` Compass-ML scores ${aboveLine.length} candidate${aboveLine.length > 1 ? "s" : ""} higher (${aboveLine.slice(0, 2).map(d => d.label).join(", ")}${aboveLine.length > 2 ? "\u2026" : ""}).` : ""}
+                    {belowLine.length > 0 ? ` Heuristic scores ${belowLine.length} candidate${belowLine.length > 1 ? "s" : ""} higher (${belowLine.slice(0, 2).map(d => d.label).join(", ")}${belowLine.length > 2 ? "\u2026" : ""}).` : ""}
+                    {modelAgreement != null ? ` Rank correlation \u03c1 = ${modelAgreement} \u2014 ${modelAgreement >= 0.7 ? "strong agreement, QC corroborates activity predictions" : modelAgreement >= 0.4 ? "moderate agreement, QC catches biophysical edge cases activity model misses" : "weak agreement, models measure different things \u2014 QC serves as independent sanity check"}.` : ""}
+                  </div>
+                );
+              })()}
+            </div>
+          );
+        })()}
+      </CollapsibleSection>
     </div>
   );
 };
@@ -3577,7 +3673,7 @@ const CandidateAccordion = ({ r, onShowAlternatives }) => {
           ...(r.pamAdjusted != null && r.pamPenalty != null && r.pamPenalty < 1.0 ? [{ l: "PAM-adjusted", v: `${r.pamAdjusted.toFixed(3)} (${r.pamPenalty}×)`, c: T.textSec }] : []),
           { l: r.strategy === "Proximity" ? "Disc (AS-RPA)" : "Discrimination", v: r.strategy === "Proximity" ? (r.asrpaDiscrimination ? (r.asrpaDiscrimination.block_class === "none" ? "1× (no mismatch)" : `${r.asrpaDiscrimination.disc_ratio >= 100 ? "≥100" : r.asrpaDiscrimination.disc_ratio.toFixed(0)}× ${r.asrpaDiscrimination.terminal_mismatch}`) : "AS-RPA") : r.gene === "IS6110" ? "N/A (control)" : `${typeof r.disc === "number" ? r.disc.toFixed(1) : r.disc}×`, c: r.strategy === "Proximity" ? (r.asrpaDiscrimination?.block_class === "none" ? T.danger : T.purple) : r.gene === "IS6110" ? T.textTer : discColor },
           ...(r.strategy === "Proximity" && r.proximityDistance ? [{ l: "Distance", v: `${r.proximityDistance} bp`, c: T.purple }] : []),
-          { l: "Activity QC", v: r.activityQc != null ? r.activityQc.toFixed(3) : r.score.toFixed(3), c: T.textTer },
+          { l: "Activity QC", v: r.activityQc != null ? r.activityQc.toFixed(3) : (r.score ?? 0).toFixed(3), c: T.textTer },
           ...(r.discriminationQc != null ? [{ l: "Disc QC", v: r.discriminationQc.toFixed(3), c: r.discriminationQc > 0.6 ? T.success : r.discriminationQc > 0.3 ? T.warning : T.danger }] : []),
           { l: "GC%", v: `${(r.gc * 100).toFixed(0)}%`, c: T.text },
           { l: "Off-targets", v: r.ot, c: r.ot === 0 ? T.success : T.warning },
@@ -3691,13 +3787,13 @@ const CandidateAccordion = ({ r, onShowAlternatives }) => {
           {openTab === "oligos" && (
             <div style={{ background: T.bgSub, border: `1px solid ${T.borderLight}`, borderRadius: "4px", overflow: "hidden" }}>
               {[
-                { name: `${r.label}_crRNA`, seq: `AATTTCTACTCTTGTAGAT${displaySpacer}`, note: "Direct repeat + spacer" },
-                ...(r.fwd ? [{ name: `${r.label}_FWD`, seq: r.fwd, note: r.strategy === "Direct" ? "Standard RPA forward" : "AS-RPA forward (allele-specific)" }] : []),
-                ...(r.rev ? [{ name: `${r.label}_REV`, seq: r.rev, note: r.strategy === "Direct" ? "Standard RPA reverse" : "AS-RPA reverse (allele-specific)" }] : []),
+                { name: `${r.label}_crRNA`, seq: `AATTTCTACTCTTGTAGAT${displaySpacer}`, note: "Direct repeat + spacer", tm: null },
+                ...(r.fwd ? [{ name: `${r.label}_FWD`, seq: r.fwd, note: r.strategy === "Direct" ? "Standard RPA forward" : "AS-RPA forward (allele-specific)", tm: r.fwdTm }] : []),
+                ...(r.rev ? [{ name: `${r.label}_REV`, seq: r.rev, note: r.strategy === "Direct" ? "Standard RPA reverse" : "AS-RPA reverse (allele-specific)", tm: r.revTm }] : []),
               ].map((o, i, arr) => (
                 <div key={o.name} style={{ padding: "10px 14px", borderBottom: i < arr.length - 1 ? `1px solid ${T.borderLight}` : "none" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                    <span style={{ fontSize: "10px", fontWeight: 600, fontFamily: MONO, color: T.text }}>{o.name}</span>
+                    <span style={{ fontSize: "10px", fontWeight: 600, fontFamily: MONO, color: T.text }}>{o.name}{o.tm != null && <span style={{ marginLeft: "8px", fontSize: "9px", fontWeight: 500, color: T.textSec, fontFamily: FONT }}>Tm {o.tm.toFixed(1)} °C</span>}</span>
                     <button onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(o.seq); toast(`${o.name} copied`); }} style={{ background: "none", border: `1px solid ${T.border}`, borderRadius: "5px", padding: "3px 8px", cursor: "pointer", fontSize: "9px", color: T.textSec, display: "flex", alignItems: "center", gap: "3px" }}><Copy size={9} /> Copy</button>
                   </div>
                   <div style={{ background: T.bg, borderRadius: "4px", padding: "8px 10px", border: `1px solid ${T.borderLight}`, marginBottom: "4px" }}>
@@ -3751,6 +3847,52 @@ const CandidateAccordion = ({ r, onShowAlternatives }) => {
                   ))}
                 </div>
               </div>
+
+              {/* Score Breakdown — heuristic sub-scores */}
+              {r.seedPositionScore != null && (
+                <div style={{ gridColumn: mobile ? "1" : "1 / -1" }}>
+                  <div style={{ fontSize: "11px", fontWeight: 600, color: T.textSec, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "8px" }}>Score Breakdown</div>
+                  <div style={{ background: T.bgSub, border: `1px solid ${T.borderLight}`, borderRadius: "4px", padding: "12px 14px" }}>
+                    {[
+                      { label: "Seed Position", value: r.seedPositionScore },
+                      { label: "GC Content", value: r.gcPenalty },
+                      { label: "Structure (MFE)", value: r.structurePenalty },
+                      { label: "Homopolymer", value: r.homopolymerPenalty },
+                      { label: "Off-target", value: r.offtargetPenalty },
+                    ].filter(s => s.value != null).map(s => {
+                      const barColor = s.value > 0.7 ? T.success : s.value > 0.4 ? T.warning : T.danger;
+                      return (
+                        <div key={s.label} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
+                          <span style={{ fontSize: "10px", color: T.textSec, width: "100px", flexShrink: 0 }}>{s.label}</span>
+                          <div style={{ flex: 1, height: "8px", borderRadius: "4px", background: T.borderLight, overflow: "hidden" }}>
+                            <div style={{ height: "100%", width: `${Math.max(s.value * 100, 2)}%`, borderRadius: "4px", background: barColor, transition: "width 0.3s" }} />
+                          </div>
+                          <span style={{ fontSize: "10px", fontWeight: 600, color: barColor, fontFamily: MONO, minWidth: "32px", textAlign: "right" }}>{s.value.toFixed(2)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Thermodynamics section */}
+              {(r.mfe != null || r.thermoDdg != null || r.mismatchType != null) && (
+                <div style={{ gridColumn: mobile ? "1" : "1 / -1" }}>
+                  <div style={{ fontSize: "11px", fontWeight: 600, color: T.textSec, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "8px" }}>Thermodynamics</div>
+                  <div style={{ background: T.bgSub, border: `1px solid ${T.borderLight}`, borderRadius: "4px", overflow: "hidden" }}>
+                    {[
+                      ...(r.mfe != null ? [["MFE", `${r.mfe.toFixed(1)} kcal/mol`]] : []),
+                      ...(r.thermoDdg != null ? [["\u0394\u0394G at mismatch", `${r.thermoDdg.toFixed(1)} kcal/mol`]] : []),
+                      ...(r.mismatchType != null ? [["Mismatch type", r.mismatchType]] : []),
+                    ].map(([k, v], i, arr) => (
+                      <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "7px 14px", borderBottom: i < arr.length - 1 ? `1px solid ${T.borderLight}` : "none", fontSize: "11px" }}>
+                        <span style={{ color: T.textSec }}>{k}</span>
+                        <span style={{ fontWeight: 600, color: T.text, fontFamily: MONO }}>{v}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -3762,7 +3904,7 @@ const CandidateAccordion = ({ r, onShowAlternatives }) => {
 const CandidatesTab = ({ results, jobId, connected, scorer }) => {
   const mobile = useIsMobile();
   const [search, setSearch] = useState("");
-  const defaultSort = "cnnCalibrated";
+  const defaultSort = "readinessScore";
   const [sortKey, setSortKey] = useState(defaultSort);
   const [sortDir, setSortDir] = useState(-1);
   const [drugFilter, setDrugFilter] = useState("ALL");
@@ -3807,9 +3949,11 @@ const CandidatesTab = ({ results, jobId, connected, scorer }) => {
       const q = search.toLowerCase();
       arr = arr.filter((r) => r.label.toLowerCase().includes(q) || r.gene.toLowerCase().includes(q) || r.spacer.toLowerCase().includes(q));
     }
+    const PREV_ORDER = { "rpoB_S531L": 45, "rpoB_H526Y": 15, "rpoB_D516V": 8, "katG_S315T": 60, "fabG1_C-15T": 25, "embB_M306V": 30, "embB_M306I": 15, "pncA_H57D": 5, "gyrA_D94G": 25, "gyrA_A90V": 15, "rrs_A1401G": 80, "eis_C-14T": 10, "IS6110_N0N": 0 };
     const getSortVal = (r) => {
       if (sortKey === "riskOverall") { const v = r.riskProfile?.overall; return v === "green" ? 2 : v === "amber" ? 1 : 0; }
       if (sortKey === "experimentalPriority") return r.experimentalPriority ?? 999;
+      if (sortKey === "prevalence") return PREV_ORDER[r.label] || 0;
       return r[sortKey] ?? 0;
     };
     arr.sort((a, b) => (getSortVal(a) > getSortVal(b) ? 1 : -1) * sortDir);
@@ -3826,16 +3970,45 @@ const CandidatesTab = ({ results, jobId, connected, scorer }) => {
 
   const hasReadiness = filtered.some(r => r.readinessScore != null);
   const hasPamAdj = filtered.some(r => r.pamAdjusted != null && r.pamAdjusted !== r.cnnCalibrated);
-  // Columns: #, Target, Drug, Spacer, Activity, PAM-adj, Disc, QC, Readiness
+
+  // Mutation prevalence (% of drug-resistant isolates, WHO 2021 catalogue)
+  const PREVALENCE = {
+    "rpoB_S531L": { pct: "~45%", tip: "Most common RIF-R globally" },
+    "rpoB_H526Y": { pct: "~15%", tip: "Second most common RIF-R" },
+    "rpoB_D516V": { pct: "~8%", tip: "Third most common RIF-R" },
+    "katG_S315T": { pct: "~60%", tip: "Dominant INH-R mechanism" },
+    "fabG1_C-15T": { pct: "~25%", tip: "Second INH-R, inhA promoter" },
+    "embB_M306V": { pct: "~30%", tip: "Most common EMB-R" },
+    "embB_M306I": { pct: "~15%", tip: "Second EMB-R at codon 306" },
+    "pncA_H57D": { pct: "~5%", tip: "Moderate PZA-R, variable by region" },
+    "gyrA_D94G": { pct: "~25%", tip: "Most common FQ-R" },
+    "gyrA_A90V": { pct: "~15%", tip: "Second most common FQ-R" },
+    "rrs_A1401G": { pct: ">80%", tip: "Dominant AG-R mechanism" },
+    "eis_C-14T": { pct: "~10%", tip: "KAN-R via eis promoter" },
+    "IS6110_N0N": { pct: "N/A", tip: "Species ID control" },
+  };
+
+  // Risk flags per candidate
+  const getRiskFlags = (r) => {
+    const flags = [];
+    const pamAdj = r.pamAdjusted ?? r.cnnCalibrated ?? r.score ?? 0;
+    if (pamAdj < 0.3 && pamAdj > 0) flags.push({ icon: "\u2193", label: "Low signal", color: T.danger, tip: `PAM-adj ${pamAdj.toFixed(2)}` });
+    if (r.gc && r.gc > 0.72) flags.push({ icon: "GC", label: "High GC", color: T.warning, tip: `${(r.gc * 100).toFixed(0)}% GC` });
+    if (r.strategy === "Direct" && r.disc < 5 && r.disc > 0) flags.push({ icon: "D", label: "Low disc", color: T.warning, tip: `${r.disc.toFixed(1)}\u00d7` });
+    if (r.ot > 0) flags.push({ icon: "OT", label: "Off-targets", color: T.danger, tip: `${r.ot} hits` });
+    return flags;
+  };
+
+  // Columns: #, Target, Drug, Strategy, Signal, Disc, Prevalence, Risk, Readiness
   const cols = [
-    ...(hasReadiness ? [{ key: "experimentalPriority", label: "#", w: 36 }] : []),
-    { key: "label", label: "Target", w: 140 },
-    { key: "drug", label: "Drug", w: 54 },
-    { key: "spacer", label: "Spacer", w: 200 },
-    { key: "cnnCalibrated", label: "Activity", w: 66 },
-    ...(hasPamAdj ? [{ key: "pamAdjusted", label: "PAM-adj", w: 66 }] : []),
-    { key: "disc", label: "Disc", w: 64 },
-    { key: "score", label: "QC", w: 48 },
+    ...(hasReadiness ? [{ key: "experimentalPriority", label: "#", w: 32 }] : []),
+    { key: "label", label: "Target", w: 120 },
+    { key: "drug", label: "Drug", w: 50 },
+    { key: "strategy", label: "Strategy", w: 72 },
+    { key: "pamAdjusted", label: "Signal", w: 90 },
+    { key: "disc", label: "Disc", w: 70 },
+    { key: "prevalence", label: "Prevalence", w: 70 },
+    { key: "risk", label: "Risk", w: 70 },
     ...(hasReadiness ? [{ key: "readinessScore", label: "Readiness", w: 90 }] : []),
   ];
 
@@ -3851,11 +4024,12 @@ const CandidatesTab = ({ results, jobId, connected, scorer }) => {
           <span style={{ fontSize: "13px", fontWeight: 600, color: T.primaryDark, fontFamily: HEADING }}>Candidate Scoring</span>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "6px", fontSize: "13px", color: T.primaryDark, lineHeight: 1.6 }}>
-          <div><span style={{ color: T.primary }}>Activity</span> — Compass-ML predicted Cas12a on-target efficiency (0–1). <span style={{ color: T.primary }}>PAM-adj</span> = Activity × PAM penalty (actual signal strength).</div>
-          <div><span style={{ color: T.primary }}>Disc</span> — MUT/WT fold-difference. ≥3× diagnostic-grade. {"<"}2× insufficient.</div>
-          <div><span style={{ color: T.primary }}>QC</span> — biophysical heuristic (GC, homopolymer, off-target, self-comp). Sanity check, not a ranking score.</div>
-          <div><span style={{ color: T.primary }}>Readiness</span> — composite score (0–100) combining efficiency, discrimination, primer coverage, safety, and GC content. ≥40 is assay-ready.</div>
-          <div style={{ color: T.textSec }}>Click any row to expand full details, scored sequence, primers, and alternatives.</div>
+          <div><span style={{ color: T.primary }}>Signal</span> — PAM-adjusted efficiency (Activity × PAM penalty). Predicts actual signal strength on the electrode. Below 0.3 = risk of weak SWV peak.</div>
+          <div><span style={{ color: T.primary }}>Disc</span> — MUT/WT fold-difference. Direct: crRNA mismatch (XGBoost, 18 features). Proximity: AS-RPA primer selectivity. ≥3× diagnostic-grade, {"<"}2× insufficient.</div>
+          <div><span style={{ color: T.primary }}>Prevalence</span> — % of drug-resistant isolates with this mutation (WHO catalogue 2023).</div>
+          <div><span style={{ color: T.primary }}>Risk flags</span> — ↓ signal below 0.3 · GC primer GC {">"}70% · D discrimination below 5×</div>
+          <div><span style={{ color: T.primary }}>Readiness</span> — Composite 0–100 across signal, discrimination, primers, off-target, GC. ≥40 = assay-ready. Ranks by technical feasibility, not clinical importance — sort by Prevalence to prioritize by patient impact.</div>
+          <div style={{ color: T.textSec }}>Expand any row for scored sequence, primers, Top-K alternatives, and predicted SWV curves.</div>
         </div>
       </div>
 
@@ -3894,6 +4068,9 @@ const CandidatesTab = ({ results, jobId, connected, scorer }) => {
                       {isExpanded ? <ChevronDown size={14} color={T.text} /> : <ChevronRight size={14} color={T.textTer} />}
                       <span style={{ fontWeight: 600, fontFamily: MONO, fontSize: "12px", color: T.text }}>{r.label}</span>
                       <span style={{ fontSize: "10px", color: T.textTer, fontFamily: MONO }}>{r.strategy === "Proximity" ? "P" : "D"}</span>
+                      {r.pamDisrupted && r.pamDisruptionType && (
+                        <span style={{ display: "inline-block", marginLeft: "4px", padding: "1px 5px", borderRadius: "4px", fontSize: "8px", fontWeight: 600, background: "#7c3aed18", color: "#7c3aed", border: "1px solid #7c3aed33" }}>PAM Disrupted</span>
+                      )}
                     </div>
                     <span style={{ fontSize: "11px", color: T.textSec, fontFamily: MONO }}>{r.drug}</span>
                   </div>
@@ -3984,35 +4161,66 @@ const CandidatesTab = ({ results, jobId, connected, scorer }) => {
                     </td>
                     {/* # (priority) */}
                     {hasReadiness && <td style={{ padding: "10px 6px", textAlign: "center" }}>{r.experimentalPriority != null && <PriorityBadge rank={r.experimentalPriority} />}</td>}
-                    {/* Target — includes strategy icon */}
+                    {/* Target — clean, no strategy subscript */}
                     <td style={{ padding: "10px 12px" }}>
                       <span style={{ fontWeight: 600, fontFamily: MONO, fontSize: "11px", color: T.text }}>{r.label}</span>
-                      <span style={{ fontSize: "9px", color: T.textTer, marginLeft: "6px", fontFamily: MONO, fontWeight: 500 }}>{stratIcon}</span>
                     </td>
-                    {/* Drug — plain text, monochrome */}
-                    <td style={{ padding: "10px 12px", fontFamily: MONO, fontSize: "11px", color: T.textSec, fontWeight: 500 }}>{r.drug}</td>
-                    {/* Spacer — muted monospace, colored nucleotides on hover only */}
-                    <td style={{ padding: "10px 12px" }}>
-                      {isHov ? (
-                        <span style={{ fontFamily: MONO, fontSize: "11px", letterSpacing: "1px" }}>
-                          {r.spacer?.slice(0, 24).split("").map((c, i) => (
-                            <span key={i} style={{ color: c === "A" ? "#059669" : c === "T" ? "#DC2626" : c === "G" ? "#D97706" : "#4338CA", fontWeight: 500 }}>{c}</span>
-                          ))}
-                        </span>
-                      ) : (
-                        <span style={{ fontFamily: MONO, fontSize: "11px", letterSpacing: "1px", color: T.textTer }}>{r.spacer?.slice(0, 24)}</span>
-                      )}
+                    {/* Drug */}
+                    <td style={{ padding: "10px 8px" }}><DrugBadge drug={r.drug} /></td>
+                    {/* Strategy — prominent pill */}
+                    <td style={{ padding: "10px 8px" }}>
+                      <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: "4px", fontSize: "10px", fontWeight: 600,
+                        background: r.strategy === "Direct" ? "rgba(37,99,235,0.08)" : "rgba(124,58,237,0.08)",
+                        color: r.strategy === "Direct" ? T.primary : "#7c3aed",
+                        border: `1px solid ${r.strategy === "Direct" ? "rgba(37,99,235,0.2)" : "rgba(124,58,237,0.2)"}`,
+                      }}>{r.strategy === "Direct" ? "Direct" : "Proximity"}</span>
                     </td>
-                    {/* Activity — Compass-ML calibrated, colored */}
-                    <td style={{ padding: "10px 12px", fontFamily: FONT, fontWeight: 600, fontSize: "11px", color: activityVal > 0.7 ? T.primary : activityVal > 0.5 ? T.warning : T.danger }}>{activityVal.toFixed(3)}</td>
-                    {/* PAM-adj — activity × PAM penalty, dimmer */}
-                    {hasPamAdj && <td style={{ padding: "10px 12px", fontFamily: FONT, fontSize: "11px", color: T.textSec }}>{pamAdjVal.toFixed(3)}{r.pamPenalty != null && r.pamPenalty < 1.0 ? <span style={{ fontSize: "9px", color: T.textTer, marginLeft: "2px" }}>({r.pamPenalty}×)</span> : ""}</td>}
-                    {/* Disc — colored by threshold (the one meaningful color) */}
-                    <td style={{ padding: "10px 12px", fontFamily: FONT, fontWeight: 600, fontSize: "11px", color: r.pamDisrupted ? "#7c3aed" : discColor }}>
-                      {r.pamDisrupted ? <span style={{ display: "inline-block", padding: "1px 6px", borderRadius: "4px", fontSize: "10px", fontWeight: 600, background: "#7c3aed18", color: "#7c3aed", border: "1px solid #7c3aed33", letterSpacing: "0.04em" }}>PAM</span> : r.gene === "IS6110" ? <span style={{ fontSize: "10px" }}>N/A</span> : r.strategy === "Proximity" ? <span style={{ fontSize: "10px" }}>AS-RPA</span> : `${typeof r.disc === "number" ? r.disc.toFixed(1) : r.disc}×`}
+                    {/* Signal — PAM-adjusted as primary, raw activity as secondary */}
+                    <td style={{ padding: "10px 8px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span style={{ fontFamily: FONT, fontWeight: 700, fontSize: "12px", color: pamAdjVal > 0.5 ? T.text : pamAdjVal > 0.3 ? T.warning : T.danger }}>{pamAdjVal.toFixed(3)}</span>
+                        {r.pamPenalty != null && r.pamPenalty < 1.0 && (
+                          <span style={{ fontSize: "9px", color: T.textTer }}>({activityVal.toFixed(2)}{"\u00d7"}{r.pamPenalty})</span>
+                        )}
+                      </div>
+                      <div style={{ width: "100%", height: "3px", borderRadius: "2px", background: T.borderLight, marginTop: "3px", overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${Math.min(pamAdjVal * 100, 100)}%`, borderRadius: "2px",
+                          background: pamAdjVal > 0.5 ? T.primary : pamAdjVal > 0.3 ? T.warning : T.danger,
+                        }} />
+                      </div>
                     </td>
-                    {/* QC — heuristic, small gray */}
-                    <td style={{ padding: "10px 8px", fontFamily: FONT, fontSize: "10px", color: T.textTer }}>{r.score.toFixed(2)}</td>
+                    {/* Disc — with AS-RPA range for proximity */}
+                    <td style={{ padding: "10px 8px", fontFamily: FONT, fontWeight: 600, fontSize: "11px", color: r.gene === "IS6110" ? T.textTer : r.strategy === "Proximity" ? "#7c3aed" : discColor }}>
+                      {r.gene === "IS6110" ? <span style={{ fontSize: "10px", fontWeight: 400 }}>N/A</span>
+                        : r.strategy === "Proximity" ? (() => {
+                          const ad = r.asrpaDiscrimination;
+                          if (ad && ad.disc_ratio) return <span>{ad.disc_ratio >= 100 ? "\u2265100" : `~${ad.disc_ratio.toFixed(0)}`}{"\u00d7"}</span>;
+                          return <span style={{ fontSize: "10px" }}>AS-RPA</span>;
+                        })()
+                        : `${typeof r.disc === "number" ? r.disc.toFixed(1) : r.disc}\u00d7`}
+                    </td>
+                    {/* Prevalence — clinical importance */}
+                    <td style={{ padding: "10px 8px" }}>
+                      {(() => {
+                        const prev = PREVALENCE[r.label];
+                        if (!prev) return <span style={{ fontSize: "10px", color: T.textTer }}>{"\u2014"}</span>;
+                        return <span style={{ fontSize: "11px", fontWeight: 600, color: T.text, fontFamily: FONT }} title={prev.tip}>{prev.pct}</span>;
+                      })()}
+                    </td>
+                    {/* Risk — compact flag icons */}
+                    <td style={{ padding: "10px 6px" }}>
+                      {(() => {
+                        const flags = getRiskFlags(r);
+                        if (flags.length === 0) return <span style={{ fontSize: "10px", color: T.success, background: T.success + "20", border: `1px solid ${T.success}30`, padding: "2px 5px", borderRadius: "4px", fontWeight: 700 }}>{"\u2191"}</span>;
+                        return (
+                          <div style={{ display: "flex", gap: "3px", flexWrap: "wrap" }}>
+                            {flags.map((f, i) => (
+                              <span key={i} title={`${f.label}: ${f.tip}`} style={{ display: "inline-block", padding: "2px 5px", borderRadius: "4px", fontSize: "8px", fontWeight: 700, background: f.color + "20", border: `1px solid ${f.color}30`, color: f.color, fontFamily: MONO }}>{f.icon}</span>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                    </td>
                     {/* Readiness — gradient fill (keep strongest visual element) */}
                     {hasReadiness && (
                       <td style={{ padding: "10px 8px" }}>
@@ -4244,12 +4452,12 @@ const CrossReactivityMatrix = () => {
 
       {/* Summary panel */}
       <div style={{ background: T.bgSub, border: `1px solid ${T.border}`, borderRadius: 4, padding: "16px 20px", marginBottom: 16 }}>
-        <div style={{ fontSize: 11, color: T.text, fontFamily: MONO, lineHeight: 1.8 }}>
+        <div style={{ fontSize: 11, color: T.text, fontFamily: MONO, lineHeight: 2.0 }}>
           <strong>{data.n_pairs} / {data.n_pairs}</strong> pairs tested<br />
           <strong>{data.none_count}</strong> pairs: no cross-reactivity (&lt; 1%)<br />
           <strong>{data.same_gene_pairs.length}</strong> pairs: low{"\u2013"}medium cross-reactivity (same-gene overlapping amplicons)
         </div>
-        <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 6 }}>
+        <div style={{ marginTop: 12, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: 4, fontSize: 10, fontWeight: 600,
             background: data.panel_safe ? "#ECFDF5" : "#FEF2F2",
             color: data.panel_safe ? "#059669" : "#DC2626",
@@ -4259,10 +4467,10 @@ const CrossReactivityMatrix = () => {
           </span>
         </div>
         {data.same_gene_pairs.length > 0 && (
-          <div style={{ marginTop: 10, fontSize: 10, color: T.textSec, lineHeight: 1.7 }}>
-            <strong>Same-gene pairs with residual cross-reactivity:</strong>
+          <div style={{ marginTop: 16, fontSize: 10, color: T.textSec, lineHeight: 1.7 }}>
+            <strong style={{ display: "block", marginBottom: "8px" }}>Same-gene pairs with residual cross-reactivity:</strong>
             {data.same_gene_pairs.filter(p => p.sourceIdx < p.targetIdx || !data.same_gene_pairs.find(q => q.sourceIdx === p.targetIdx && q.targetIdx === p.sourceIdx && q.sourceIdx < q.targetIdx)).map(p => (
-              <div key={`${p.source}-${p.target}`} style={{ fontFamily: MONO, marginLeft: 8, fontSize: 9 }}>
+              <div key={`${p.source}-${p.target}`} style={{ fontFamily: MONO, marginLeft: 8, fontSize: 9, marginBottom: "6px", lineHeight: 1.7 }}>
                 {"\u2022"} {p.source} {"\u2194"} {p.target}: {(p.activity * 100).toFixed(1)}% ({p.risk.toUpperCase()}) {"\u2014"} {p.note}
               </div>
             ))}
@@ -4272,6 +4480,56 @@ const CrossReactivityMatrix = () => {
           </div>
         )}
       </div>
+
+      {/* Top Risk Pairs — sorted by off-target activity */}
+      {(() => {
+        const riskPairs = [...data.matrix]
+          .filter(m => m.activity > 0.01)
+          .sort((a, b) => b.activity - a.activity)
+          .slice(0, 8);
+        if (riskPairs.length === 0) return null;
+        return (
+          <div style={{ background: T.bg, border: `1px solid ${T.borderLight}`, borderRadius: 4, padding: "12px 16px", marginBottom: 16 }}>
+            <div style={{ fontWeight: 600, color: T.text, marginBottom: 6, fontSize: 11, fontFamily: HEADING }}>Top Risk Pairs</div>
+            <div style={{ fontSize: 10, color: T.textSec, marginBottom: 8, lineHeight: 1.5 }}>
+              Highest-risk crRNA pairs ranked by predicted off-target activity. Only pairs with {">"}1% cross-reactivity shown.
+            </div>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10, fontFamily: FONT }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${T.border}` }}>
+                  {["Source crRNA", "Off-target amplicon", "Activity", "Mismatches", "PAM", "Risk"].map(hd => (
+                    <th key={hd} style={{ padding: "4px 8px", textAlign: "left", fontWeight: 600, color: T.textTer, fontSize: 9, textTransform: "uppercase", letterSpacing: "0.04em" }}>{hd}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {riskPairs.map((p, idx) => {
+                  const riskColor = p.risk === "high" ? T.danger : p.risk === "medium" ? T.warning : "#D97706";
+                  return (
+                    <tr key={idx} style={{ borderBottom: `1px solid ${T.borderLight}` }}>
+                      <td style={{ padding: "4px 8px", fontFamily: MONO, fontWeight: 600, fontSize: 9 }}>{p.source}</td>
+                      <td style={{ padding: "4px 8px", fontFamily: MONO, fontSize: 9, color: T.textSec }}>{p.target}</td>
+                      <td style={{ padding: "4px 8px", fontWeight: 600, color: riskColor }}>{(p.activity * 100).toFixed(1)}%</td>
+                      <td style={{ padding: "4px 8px", color: T.textSec }}>{p.mismatches} nt</td>
+                      <td style={{ padding: "4px 8px" }}>
+                        <span style={{ fontSize: 9, fontWeight: 500, color: p.pam_valid ? T.warning : T.success }}>{p.pam_valid ? "valid" : "absent"}</span>
+                      </td>
+                      <td style={{ padding: "4px 8px" }}>
+                        <span style={{ display: "inline-block", padding: "1px 6px", borderRadius: 3, fontSize: 9, fontWeight: 600, background: riskColor + "15", color: riskColor, textTransform: "uppercase" }}>{p.risk}</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {riskPairs.every(p => p.note != null) && (
+              <div style={{ marginTop: 6, fontSize: 9, color: T.textTer }}>
+                All high-activity pairs are same-gene overlapping amplicons {"\u2014"} managed by spatial isolation on the electrode array.
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Interpretation */}
       <div style={{ background: T.bg, border: `1px solid ${T.borderLight}`, borderRadius: 4, padding: "12px 16px", fontSize: 10, color: T.textSec, lineHeight: 1.7 }}>
@@ -4290,6 +4548,7 @@ const CrossReactivityMatrix = () => {
 
 const DiscriminationTab = ({ results }) => {
   const mobile = useIsMobile();
+  const [expandedFeatures, setExpandedFeatures] = useState({});
   const nonControl = results.filter((r) => r.disc < 900);
   const directCands = nonControl.filter((r) => r.strategy === "Direct");
   const proximityCands = nonControl.filter((r) => r.strategy === "Proximity");
@@ -4299,9 +4558,74 @@ const DiscriminationTab = ({ results }) => {
   const acceptable = directCands.filter((r) => r.disc >= 2 && r.disc < 3).length;
   const insufficient = directCands.filter((r) => r.disc < 2).length;
 
+  // Helper: classify mismatch type (transition vs transversion)
+  const TRANSITIONS_SET = new Set(["AG", "GA", "CT", "TC"]);
+  const classifyMismatch = (mutBase, wtBase) => {
+    if (!mutBase || !wtBase || mutBase === wtBase) return null;
+    const pair = (mutBase + wtBase).toUpperCase();
+    const isTransition = TRANSITIONS_SET.has(pair);
+    return { change: `${wtBase}\u2192${mutBase}`, isTransition, label: isTransition ? "transition" : "transversion" };
+  };
+  const deriveMismatch = (r) => {
+    if (r.mismatchType) return r.mismatchType;
+    if (r.spacer && r.wtSpacer && r.spacer.length === r.wtSpacer.length) {
+      for (let i = 0; i < r.spacer.length; i++) {
+        if (r.spacer[i] !== r.wtSpacer[i]) {
+          const info = classifyMismatch(r.spacer[i], r.wtSpacer[i]);
+          if (info) return `${info.change} ${info.label}`;
+        }
+      }
+    }
+    return null;
+  };
+  const isMismatchTransversion = (r) => {
+    if (r.mismatchType) return r.mismatchType.toLowerCase().includes("transversion");
+    if (r.spacer && r.wtSpacer && r.spacer.length === r.wtSpacer.length) {
+      for (let i = 0; i < r.spacer.length; i++) {
+        if (r.spacer[i] !== r.wtSpacer[i]) {
+          const info = classifyMismatch(r.spacer[i], r.wtSpacer[i]);
+          if (info) return !info.isTransition;
+        }
+      }
+    }
+    return false;
+  };
+
   return (
     <div>
       <InSilicoCaveat />
+
+      {/* Unified discrimination summary — all 13 targets */}
+      <div style={{ background: T.bgSub, border: `1px solid ${T.border}`, borderRadius: "4px", padding: "14px 18px", marginBottom: "16px" }}>
+        <div style={{ fontSize: "11px", fontWeight: 600, color: T.textTer, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "10px" }}>Discrimination Summary — All Targets</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "4px" }}>
+          {[...results].filter(r => r.gene !== "IS6110").sort((a, b) => {
+            const aDisc = a.strategy === "Proximity" ? (a.asrpaDiscrimination?.disc_ratio || 100) : (a.disc || 0);
+            const bDisc = b.strategy === "Proximity" ? (b.asrpaDiscrimination?.disc_ratio || 100) : (b.disc || 0);
+            return bDisc - aDisc;
+          }).map(r => {
+            const disc = r.strategy === "Proximity" ? (r.asrpaDiscrimination?.disc_ratio || 100) : (r.disc || 0);
+            const discLabel = r.strategy === "Proximity"
+              ? (disc >= 100 ? "\u2265100\u00d7" : `~${disc.toFixed(0)}\u00d7`)
+              : `${disc.toFixed(1)}\u00d7`;
+            const source = r.strategy === "Proximity" ? "AS-RPA" : "crRNA";
+            const maxBar = 100;
+            const barW = Math.min(disc / maxBar * 100, 100);
+            const barColor = r.strategy === "Proximity" ? "#7c3aed" : (disc >= 10 ? "#16a34a" : disc >= 3 ? "#2563EB" : "#d97706");
+            return (
+              <div key={r.label} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "3px 0" }}>
+                <span style={{ fontFamily: MONO, fontSize: "10px", fontWeight: 600, color: T.text, width: "110px", flexShrink: 0 }}>{r.label}</span>
+                <div style={{ flex: 1, height: "6px", borderRadius: "3px", background: T.borderLight, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${barW}%`, borderRadius: "3px", background: barColor }} />
+                </div>
+                <span style={{ fontFamily: FONT, fontSize: "10px", fontWeight: 600, color: barColor, width: "50px", textAlign: "right" }}>{discLabel}</span>
+                <span style={{ fontSize: "9px", color: T.textTer, width: "40px" }}>{source}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Blue explainer */}
       <div style={{ background: T.primaryLight, border: `1px solid ${T.primary}33`, borderRadius: "4px", padding: mobile ? "16px" : "20px 24px", marginBottom: "24px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
@@ -4344,11 +4668,18 @@ const DiscriminationTab = ({ results }) => {
         ))}
       </div>
 
+      {proximityCands.length > 0 && (
+        <div style={{ background: "#F5F3FF", border: "1px solid #DDD6FE", borderRadius: "4px", padding: "12px 16px", marginBottom: "24px", display: "flex", alignItems: "center", gap: "10px" }}>
+          <span style={{ fontSize: "13px", fontWeight: 600, color: "#7c3aed" }}>{proximityCands.length} proximity targets</span>
+          <span style={{ fontSize: "12px", color: "#6D28D9" }}>Discrimination via AS-RPA primers (11{"\u2013"}100{"\u00d7"} estimated selectivity) {"\u2014"} see table below</span>
+        </div>
+      )}
+
       {/* Discrimination chart — horizontal lollipop */}
       {(() => {
         const DRUG_DC = { RIF: "#1E3A5F", INH: "#4338CA", EMB: "#059669", FQ: "#DC2626", AG: "#3730A3", PZA: "#059669", OTHER: "#9CA3AF" };
         const sorted = [...directCands].sort((a, b) => b.disc - a.disc);
-        const discChart = sorted.map((r) => ({ name: r.label, disc: +r.disc, score: r.score, drug: r.drug }));
+        const discChart = sorted.map((r) => ({ name: r.label, disc: +r.disc, score: r.score, drug: r.drug, discConfidence: r.discConfidence ?? null }));
         const diagGrade = discChart.filter(d => d.disc >= 3).length;
         const maxDisc = Math.max(...discChart.map(d => d.disc), 12);
         const thresholds = [
@@ -4374,12 +4705,12 @@ const DiscriminationTab = ({ results }) => {
               </div>
             </div>
             {/* Horizontal lollipop chart */}
-            <div style={{ position: "relative", paddingLeft: "120px", paddingRight: "52px" }}>
+            <div style={{ position: "relative", paddingLeft: "120px", paddingRight: "72px" }}>
               {/* Threshold vertical lines */}
               {thresholds.map(t => {
                 const pct = (t.val / maxDisc) * 100;
                 return (
-                  <div key={t.val} style={{ position: "absolute", left: `calc(120px + (100% - 172px) * ${pct / 100})`, top: 0, bottom: 0, width: 0, borderLeft: `1.5px dashed ${t.color}33`, zIndex: 0, pointerEvents: "none" }}>
+                  <div key={t.val} style={{ position: "absolute", left: `calc(120px + (100% - 192px) * ${pct / 100})`, top: 0, bottom: 0, width: 0, borderLeft: `1.5px dashed ${t.color}33`, zIndex: 0, pointerEvents: "none" }}>
                     <span style={{ position: "absolute", top: -16, left: "50%", transform: "translateX(-50%)", fontSize: "9px", fontWeight: 600, color: `${t.color}99`, whiteSpace: "nowrap" }}>{t.label}</span>
                   </div>
                 );
@@ -4391,7 +4722,7 @@ const DiscriminationTab = ({ results }) => {
                   const status = d.disc >= 10 ? "excellent" : d.disc >= 3 ? "good" : d.disc >= 2 ? "acceptable" : "insufficient";
                   const statusColor = status === "excellent" ? T.success : status === "good" ? T.primary : status === "acceptable" ? T.warning : T.danger;
                   return (
-                    <div key={d.name} style={{ display: "flex", alignItems: "center", height: "30px", marginLeft: "-120px", marginRight: "-52px" }}>
+                    <div key={d.name} style={{ display: "flex", alignItems: "center", height: "30px", marginLeft: "-120px", marginRight: "-72px" }}>
                       <div style={{ width: "120px", flexShrink: 0, fontSize: "10px", fontFamily: MONO, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingRight: "12px", textAlign: "right" }}>{d.name}</div>
                       <div style={{ flex: 1, position: "relative", height: "30px", display: "flex", alignItems: "center" }}>
                         {/* Track line */}
@@ -4411,9 +4742,13 @@ const DiscriminationTab = ({ results }) => {
                           transition: "transform 0.15s ease",
                         }} />
                       </div>
-                      {/* Value */}
-                      <div style={{ width: "52px", flexShrink: 0, textAlign: "right", fontSize: "11px", fontFamily: FONT, fontWeight: 600, color: statusColor }}>
+                      {/* Value + CI */}
+                      <div style={{ width: "72px", flexShrink: 0, textAlign: "right", fontSize: "11px", fontFamily: FONT, fontWeight: 600, color: statusColor }}>
                         {d.disc.toFixed(1)}×
+                        {d.discConfidence != null && (() => {
+                          const ciWidth = d.disc * (1 - d.discConfidence);
+                          return <span style={{ fontSize: "9px", fontWeight: 400, color: T.textTer, marginLeft: "2px" }}>{"\u00B1"}{ciWidth.toFixed(1)}</span>;
+                        })()}
                       </div>
                     </div>
                   );
@@ -4458,27 +4793,53 @@ const DiscriminationTab = ({ results }) => {
       {/* Ranking table — Direct only */}
       <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: "4px", overflow: "hidden", marginBottom: "24px" }}>
         <div style={{ fontSize: "14px", fontWeight: 600, color: T.text, fontFamily: HEADING, padding: "16px 20px", borderBottom: `1px solid ${T.border}` }}>Discrimination Ranking — Direct Detection</div>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+        <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: 820 }}>
           <thead>
             <tr style={{ background: T.bgSub }}>
-              {["Rank", "Target", "Drug", "Discrimination", "Model", "Activity", "Status"].map(h => (
+              {["Rank", "Target", "Drug", "Discrimination", "Mismatch", "MM Pos", "Activity", "Signal", "Status"].map(h => (
                 <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontWeight: 600, color: T.textSec, borderBottom: `1px solid ${T.border}` }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {[...directCands].sort((a, b) => b.disc - a.disc).map((r, i) => (
-              <tr key={r.label} style={{ borderBottom: `1px solid ${T.borderLight}` }}>
+            {[...directCands].sort((a, b) => b.disc - a.disc).map((r, i) => {
+              const mmInfo = deriveMismatch(r);
+              const isTV = isMismatchTransversion(r);
+              return (
+              <React.Fragment key={r.label}>
+              <tr style={{ borderBottom: `1px solid ${T.borderLight}` }}>
                 <td style={{ padding: "10px 14px", fontFamily: FONT, fontWeight: 600, color: T.textTer }}>{i + 1}</td>
                 <td style={{ padding: "10px 14px", fontFamily: MONO, fontWeight: 600, fontSize: "11px" }}>{r.label}</td>
                 <td style={{ padding: "10px 14px" }}><DrugBadge drug={r.drug} /></td>
                 <td style={{ padding: "10px 14px", fontFamily: FONT, fontWeight: 600, color: r.pamDisrupted ? "#7c3aed" : r.disc >= 3 ? T.success : r.disc >= 2 ? T.warning : T.danger }}>
-                  {r.pamDisrupted ? <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}><span style={{ display: "inline-block", padding: "2px 8px", borderRadius: "4px", fontSize: "10px", fontWeight: 600, background: "#7c3aed18", color: "#7c3aed", border: "1px solid #7c3aed33" }}>PAM \u221e</span></span> : <>{typeof r.disc === "number" ? r.disc.toFixed(1) : r.disc}×</>}
+                  {r.pamDisrupted ? <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}><span style={{ display: "inline-block", padding: "2px 8px", borderRadius: "4px", fontSize: "10px", fontWeight: 600, background: "#7c3aed18", color: "#7c3aed", border: "1px solid #7c3aed33" }}>PAM {"\u221E"}</span></span> : <>{typeof r.disc === "number" ? r.disc.toFixed(1) : r.disc}×{r.discConfidence != null && <span style={{ fontSize: "9px", fontWeight: 400, color: T.textTer, marginLeft: "3px" }}>{"\u00B1"}{(r.disc * (1 - r.discConfidence)).toFixed(1)}</span>}</>}
                 </td>
-                <td style={{ padding: "10px 14px", fontSize: "10px", color: r.pamDisrupted ? "#7c3aed" : r.discMethod === "neural" ? "#3b82f6" : (r.discrimination?.model_name || "").includes("learned") || r.discMethod === "feature" ? T.success : T.textTer }}>
-                  {r.pamDisrupted ? "PAM gating" : r.discMethod === "neural" ? "Neural" : (r.discrimination?.model_name || "").includes("learned") || r.discMethod === "feature" ? "Learned" : "Heuristic"}
+                {/* Mismatch type classification (Feature 2) */}
+                <td style={{ padding: "10px 14px", fontSize: "10px" }}>
+                  {mmInfo ? (
+                    <span style={{ fontFamily: MONO, fontWeight: 600, color: isTV ? T.success : T.warning }}>
+                      {mmInfo}
+                    </span>
+                  ) : "\u2014"}
+                </td>
+                <td style={{ padding: "10px 14px", fontSize: "10px", fontFamily: MONO }}>
+                  {(() => {
+                    if (!r.spacer || !r.wtSpacer) return "\u2014";
+                    for (let i = 0; i < Math.min(r.spacer.length, r.wtSpacer.length); i++) {
+                      if (r.spacer[i] !== r.wtSpacer[i]) {
+                        const pos = i + 1;
+                        const region = pos <= 8 ? "seed" : "distal";
+                        return <span><strong>{pos}</strong> <span style={{ fontSize: "9px", color: T.textTer }}>({region})</span></span>;
+                      }
+                    }
+                    return "\u2014";
+                  })()}
                 </td>
                 <td style={{ padding: "10px 14px", fontFamily: FONT }}>{(r.cnnCalibrated ?? r.score).toFixed(3)}</td>
+                <td style={{ padding: "10px 12px", fontFamily: FONT, fontSize: "11px", color: (r.pamAdjusted ?? r.cnnCalibrated ?? r.score ?? 0) < 0.3 ? T.danger : T.textSec }}>
+                  {(r.pamAdjusted ?? r.cnnCalibrated ?? r.score ?? 0).toFixed(3)}
+                </td>
                 <td style={{ padding: "10px 14px" }}>
                   {r.pamDisrupted ? (
                     <Badge variant="success">PAM-disrupted</Badge>
@@ -4489,9 +4850,52 @@ const DiscriminationTab = ({ results }) => {
                   )}
                 </td>
               </tr>
-            ))}
+              {/* PAM disruption highlight row (Feature 3) */}
+              {r.pamDisrupted && (
+                <tr style={{ borderBottom: `1px solid ${T.borderLight}` }}>
+                  <td colSpan={9} style={{ padding: "6px 14px 6px 42px", background: "#7c3aed08" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <Shield size={12} color="#7c3aed" strokeWidth={2} />
+                      <span style={{ fontSize: "10px", fontWeight: 600, color: "#7c3aed" }}>Binary discrimination — SNP disrupts PAM</span>
+                      <span style={{ fontSize: "10px", color: T.textTer }}>
+                        {r.pamDisruptionType ? `(${r.pamDisruptionType}) ` : ""}The SNP converts a valid TTTV PAM to a non-functional sequence. Cas12a cannot initiate R-loop formation on WT, providing the strongest possible selectivity mechanism.
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+              )}
+              {/* XGBoost feature vector display (Feature 4) */}
+              {r.discFeatureVector && (
+                <tr style={{ borderBottom: `1px solid ${T.borderLight}` }}>
+                  <td colSpan={9} style={{ padding: "0 14px 0 42px" }}>
+                    <button
+                      onClick={() => setExpandedFeatures(prev => ({ ...prev, [r.label]: !prev[r.label] }))}
+                      style={{ background: "none", border: "none", cursor: "pointer", padding: "6px 0", display: "flex", alignItems: "center", gap: "4px", fontSize: "10px", color: T.textTer }}
+                    >
+                      <ChevronRight size={10} style={{ transform: expandedFeatures[r.label] ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 150ms ease" }} />
+                      <span style={{ fontWeight: 500 }}>Feature vector ({Object.keys(r.discFeatureVector).length} features)</span>
+                    </button>
+                    {expandedFeatures[r.label] && (
+                      <div style={{ padding: "0 0 10px 14px", display: "flex", flexWrap: "wrap", gap: "4px 12px" }}>
+                        {Object.entries(r.discFeatureVector)
+                          .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
+                          .map(([feat, val]) => (
+                            <div key={feat} style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "10px", fontFamily: MONO }}>
+                              <span style={{ color: T.textSec, fontWeight: 500 }}>{feat}:</span>
+                              <span style={{ fontWeight: 600, color: Math.abs(val) > 0.5 ? T.primary : T.textTer }}>{typeof val === "number" ? val.toFixed(3) : val}</span>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              )}
+              </React.Fragment>
+              );
+            })}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Proximity / AS-RPA section */}
@@ -4512,7 +4916,7 @@ const DiscriminationTab = ({ results }) => {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
             <thead>
               <tr style={{ background: T.bgSub }}>
-                {["Target", "Drug", "Distance", "Activity", "3′ Mismatch", "Penult. MM", "Disc. Ratio", "Block", "Primers"].map(h => (
+                {["Target", "Drug", "Distance", "Activity", "3′ Mismatch", "Penult. MM", "Disc. Ratio", "Block", "Selectivity", "Primers"].map(h => (
                   <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontWeight: 600, color: T.textSec, borderBottom: `1px solid ${T.borderLight}` }}>{h}</th>
                 ))}
               </tr>
@@ -4522,21 +4926,25 @@ const DiscriminationTab = ({ results }) => {
                 const d = r.asrpaDiscrimination;
                 const blockColor = d?.block_class === "strong" ? T.success : d?.block_class === "moderate" ? T.warning : T.danger;
                 return (
-                  <tr key={r.label} style={{ borderBottom: `1px solid ${T.borderLight}` }}>
+                  <React.Fragment key={r.label}>
+                  <tr style={{ borderBottom: d ? "none" : `1px solid ${T.borderLight}` }}>
                     <td style={{ padding: "10px 14px", fontFamily: MONO, fontWeight: 600, fontSize: "11px" }}>{r.label}</td>
                     <td style={{ padding: "10px 14px" }}><DrugBadge drug={r.drug} /></td>
-                    <td style={{ padding: "10px 14px", fontFamily: FONT, color: T.purple }}>{r.proximityDistance ? `${r.proximityDistance} bp` : "—"}</td>
+                    <td style={{ padding: "10px 14px", fontFamily: FONT, color: T.purple }}>{r.proximityDistance ? `${r.proximityDistance} bp` : "\u2014"}</td>
                     <td style={{ padding: "10px 14px", fontFamily: FONT, fontWeight: 600, color: (r.cnnCalibrated ?? r.score) >= 0.7 ? T.success : (r.cnnCalibrated ?? r.score) >= 0.4 ? T.warning : T.danger }}>{(r.cnnCalibrated ?? r.score).toFixed(3)}</td>
-                    <td style={{ padding: "10px 14px", fontFamily: MONO, fontWeight: 600 }}>{d?.terminal_mismatch || "—"}</td>
-                    <td style={{ padding: "10px 14px", fontSize: "11px" }}>{d ? (d.has_penultimate_mm ? <span style={{ color: T.success, fontWeight: 600 }}>Yes</span> : <span style={{ color: T.textTer }}>No</span>) : "—"}</td>
+                    <td style={{ padding: "10px 14px", fontFamily: MONO, fontWeight: 600 }}>{d?.terminal_mismatch || "\u2014"}</td>
+                    <td style={{ padding: "10px 14px", fontSize: "11px" }}>{d ? (d.has_penultimate_mm ? <span style={{ color: T.success, fontWeight: 600 }}>Yes</span> : <span style={{ color: T.textTer }}>No</span>) : "\u2014"}</td>
                     <td style={{ padding: "10px 14px", fontFamily: FONT, fontWeight: 600, color: d ? (d.block_class === "none" ? T.danger : d.disc_ratio >= 50 ? T.success : d.disc_ratio >= 10 ? T.warning : T.danger) : T.textTer }}>
-                      {d ? (d.block_class === "none" ? "1× (WC)" : d.disc_ratio >= 100 ? "≥100×" : `${d.disc_ratio.toFixed(0)}×`) : "—"}
+                      {d ? (d.block_class === "none" ? "1\u00D7 (WC)" : d.disc_ratio >= 100 ? "\u2265100\u00D7" : `${d.disc_ratio.toFixed(0)}\u00D7`) : "\u2014"}
                     </td>
                     <td style={{ padding: "10px 14px" }}>
                       {d ? (d.block_class === "none"
                         ? <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: "4px", fontSize: "10px", fontWeight: 600, background: "#FEF2F2", color: T.danger, textTransform: "uppercase" }}>NO DISC</span>
                         : <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: "4px", fontSize: "10px", fontWeight: 600, background: blockColor + "20", color: blockColor, textTransform: "uppercase" }}>{d.block_class}</span>
-                      ) : "—"}
+                      ) : "\u2014"}
+                    </td>
+                    <td style={{ padding: "10px 12px", fontFamily: FONT, fontWeight: 600, fontSize: "11px", color: (d?.estimated_specificity ?? 0) >= 0.98 ? "#16a34a" : (d?.estimated_specificity ?? 0) >= 0.90 ? "#d97706" : T.danger }}>
+                      {d?.estimated_specificity != null ? `${(d.estimated_specificity * 100).toFixed(0)}%` : "\u2014"}
                     </td>
                     <td style={{ padding: "10px 14px" }}>
                       {d?.block_class === "none"
@@ -4544,6 +4952,44 @@ const DiscriminationTab = ({ results }) => {
                         : <Badge variant={r.hasPrimers ? "success" : "danger"}>{r.hasPrimers ? "AS-RPA" : "No primers"}</Badge>}
                     </td>
                   </tr>
+                  {/* AS-RPA thermodynamic details (Feature 8) */}
+                  {d && (
+                    <tr style={{ borderBottom: `1px solid ${T.borderLight}` }}>
+                      <td colSpan={10} style={{ padding: "4px 14px 10px 14px", background: `${T.purple}06` }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+                          <Zap size={11} color="#7c3aed" strokeWidth={2} />
+                          <span style={{ fontSize: "10px", fontWeight: 600, color: "#7c3aed" }}>Discrimination mechanism:</span>
+                        </div>
+                        <div style={{ fontSize: "10px", color: T.text, lineHeight: 1.6 }}>
+                          <span style={{ fontWeight: 600 }}>3{"\u2032"} mismatch:</span>{" "}
+                          <span style={{ fontFamily: MONO, fontWeight: 600 }}>{d.terminal_mismatch || "N/A"}</span>
+                          {d.terminal_mismatch && (
+                            <span style={{ color: T.textSec, marginLeft: "4px" }}>
+                              ({d.block_class === "none" ? "Watson-Crick pair \u2014 no blocking" : d.block_class === "strong" ? "purine\u00B7purine clash \u2014 strong steric block" : "pyrimidine mismatch \u2014 moderate block"})
+                            </span>
+                          )}
+                          <span style={{ margin: "0 8px", color: T.borderLight }}>{"\u2502"}</span>
+                          <span style={{ fontWeight: 600 }}>Penultimate MM:</span>{" "}
+                          <span style={{ fontWeight: 600 }}>{d.has_penultimate_mm ? "Engineered" : "None"}</span>
+                          {d.has_penultimate_mm && <span style={{ color: T.textSec, marginLeft: "4px" }}>(destabilises WT extension)</span>}
+                          <span style={{ margin: "0 8px", color: T.borderLight }}>{"\u2502"}</span>
+                          <span style={{ fontWeight: 600 }}>Selectivity:</span>{" "}
+                          <span style={{ fontWeight: 600 }}>
+                            {d.estimated_specificity != null ? `${(d.estimated_specificity * 100).toFixed(0)}%` : d.disc_ratio >= 100 ? "\u226599%" : `~${Math.round((1 - 1/d.disc_ratio) * 100)}%`}
+                          </span>
+                          <span style={{ color: T.textSec, marginLeft: "4px" }}>(allele-specific amplification selectivity)</span>
+                          {d.delta_g != null && (
+                            <>
+                              <span style={{ margin: "0 8px", color: T.borderLight }}>{"\u2502"}</span>
+                              <span style={{ fontWeight: 600 }}>{"\u0394\u0394"}G:</span>{" "}
+                              <span style={{ fontFamily: MONO, fontWeight: 600 }}>{typeof d.delta_g === "number" ? d.delta_g.toFixed(1) : d.delta_g} kcal/mol</span>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 );
               })}
             </tbody>
@@ -5228,7 +5674,12 @@ const MultiplexTab = ({ results, panelData, jobId, connected }) => {
 
   return (
     <div>
-      <InSilicoCaveat />
+      {/* ── Status banner ── */}
+      <div style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: "4px", padding: "10px 16px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
+        <CheckCircle size={14} color="#2563EB" strokeWidth={2} />
+        <span style={{ fontSize: "12px", fontWeight: 500, color: "#1D4ED8", fontFamily: FONT }}>Computational design complete {"\u2014"} electrode characterisation pending</span>
+      </div>
+
       {/* ── Explainer box ── */}
       <div style={{ background: T.primaryLight, border: `1px solid ${T.primary}25`, borderRadius: "4px", padding: mobile ? "14px" : "16px 20px", marginBottom: "16px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
@@ -5256,6 +5707,55 @@ const MultiplexTab = ({ results, panelData, jobId, connected }) => {
           MONO={MONO}
         />
       </CollapsibleSection>
+
+      {/* ═══════════ SECTION 4b: SA Optimization Convergence ═══════════ */}
+      {panelData?.optimizer_score_trace && panelData.optimizer_score_trace.length > 0 && (() => {
+        const trace = panelData.optimizer_score_trace;
+        const trN = trace.length;
+        const iterStep = 100;
+        const totalIter = trN * iterStep;
+        const trYMin = Math.min(...trace);
+        const trYMax = Math.max(...trace);
+        const trYPad = (trYMax - trYMin) * 0.1 || 0.01;
+        const trMg = { top: 20, right: 16, bottom: 34, left: 52 };
+        const trW = 520, trH = 200, trPW = trW - trMg.left - trMg.right, trPH = trH - trMg.top - trMg.bottom;
+        const trXS = i => trMg.left + (i / Math.max(trN - 1, 1)) * trPW;
+        const trYS = v => trMg.top + ((trYMax + trYPad - v) / (trYMax - trYMin + 2 * trYPad)) * trPH;
+        const trPolyline = trace.map((v, i) => `${trXS(i).toFixed(1)},${trYS(v).toFixed(1)}`).join(" ");
+        const trYTicks = Array.from({ length: 5 }, (_, i) => trYMin + (trYMax - trYMin) * (i / 4));
+        return (
+          <CollapsibleSection title="Optimization Convergence" defaultOpen={false} badge={{ text: `${totalIter.toLocaleString()} iter`, bg: T.primaryLight, color: T.primary }}>
+            <div style={{ padding: "0", marginBottom: "16px" }}>
+              <p style={{ fontSize: "12px", color: T.textSec, marginBottom: "12px", lineHeight: 1.6 }}>
+                Simulated annealing convergence ({totalIter.toLocaleString()} iterations). The panel score trace is sampled every {iterStep} iterations.
+                Higher scores indicate better multiplex panel configurations.
+              </p>
+              <div style={{ width: "100%", maxWidth: 560 }}>
+                <svg viewBox={`0 0 ${trW} ${trH}`} width="100%" height="100%" style={{ fontFamily: MONO }}>
+                  <rect width={trW} height={trH} fill="#FAFAFA" rx="6" />
+                  {[0.25, 0.5, 0.75].map(f => <line key={`gx${f}`} x1={trMg.left + trPW * f} y1={trMg.top} x2={trMg.left + trPW * f} y2={trMg.top + trPH} stroke="#E8E8E8" strokeWidth="0.5" />)}
+                  {trYTicks.map((v, i) => <line key={`gy${i}`} x1={trMg.left} y1={trYS(v)} x2={trMg.left + trPW} y2={trYS(v)} stroke="#E8E8E8" strokeWidth="0.5" />)}
+                  <line x1={trMg.left} y1={trMg.top} x2={trMg.left} y2={trMg.top + trPH} stroke="#444" strokeWidth="1.5" />
+                  <line x1={trMg.left} y1={trMg.top + trPH} x2={trMg.left + trPW} y2={trMg.top + trPH} stroke="#444" strokeWidth="1.5" />
+                  <polyline points={trPolyline} fill="none" stroke={T.primary} strokeWidth="2" strokeLinejoin="round" />
+                  <circle cx={trXS(trN - 1)} cy={trYS(trace[trN - 1])} r="3.5" fill={T.primary} stroke="#fff" strokeWidth="1.5" />
+                  {[0, 0.25, 0.5, 0.75, 1].map(f => {
+                    const iter = Math.round(f * totalIter);
+                    return <text key={f} x={trMg.left + f * trPW} y={trMg.top + trPH + 14} textAnchor="middle" fill="#666" fontSize="8">{iter >= 1000 ? `${(iter / 1000).toFixed(iter % 1000 === 0 ? 0 : 1)}k` : iter}</text>;
+                  })}
+                  {trYTicks.map((v, i) => <text key={i} x={trMg.left - 5} y={trYS(v) + 3} textAnchor="end" fill="#666" fontSize="8">{v.toFixed(3)}</text>)}
+                  <text x={trMg.left + trPW / 2} y={trH - 3} textAnchor="middle" fill="#444" fontSize="10">Iteration</text>
+                  <text x={12} y={trMg.top + trPH / 2} textAnchor="middle" fill="#444" fontSize="10" transform={`rotate(-90, 12, ${trMg.top + trPH / 2})`}>Panel Score</text>
+                  <text x={trXS(trN - 1) - 6} y={trYS(trace[trN - 1]) - 8} textAnchor="end" fill={T.primary} fontSize="9" fontWeight="600">{trace[trN - 1].toFixed(4)}</text>
+                </svg>
+              </div>
+              <div style={{ marginTop: "8px", fontSize: "10px", color: T.textTer, lineHeight: 1.5 }}>
+                Initial score: {trace[0].toFixed(4)} {"\u2192"} Final score: {trace[trN - 1].toFixed(4)} ({((trace[trN - 1] - trace[0]) / Math.abs(trace[0]) * 100).toFixed(1)}% improvement)
+              </div>
+            </div>
+          </CollapsibleSection>
+        );
+      })()}
 
       {/* ═══════════ SECTION 5b: Panel Cross-Reactivity Analysis ═══════════ */}
       <CollapsibleSection title="Panel Cross-Reactivity Analysis" defaultOpen={false} badge={{ text: `${MOCK_CROSS_REACTIVITY.same_gene_pairs.length} pairs`, bg: "#FEF3C720", color: "#D97706" }}>
@@ -5331,6 +5831,10 @@ const MultiplexTab = ({ results, panelData, jobId, connected }) => {
       {/* ═══════════ SECTION 2: Predicted Electrochemical Readout ═══════════ */}
       <CollapsibleSection title="Predicted Electrochemical Readout" defaultOpen={true} badge={{ text: "computed", bg: T.primaryLight, color: T.primary }}>
         <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: "4px", padding: mobile ? "16px" : "24px", marginBottom: "24px" }}>
+          {/* Calibration caveat */}
+          <div style={{ background: "#FFFBEB", border: "1px solid #F59E0B", borderRadius: 4, padding: "8px 14px", marginBottom: 16, fontSize: 10, color: "#92400E", lineHeight: 1.6, maxWidth: "100%" }}>
+            <strong>Pre-calibration predictions.</strong> Absolute peak currents and detection times depend on electrode-specific parameters (surface k_trans, reporter density, electrode geometry) that vary between fabrication batches. Parameter sliders below will be locked to measured values after the first electrode characterisation. Relative peak heights between candidates and MUT/WT alleles are determined by pipeline efficiency and discrimination scores.
+          </div>
           {/* Header description — architecture-dependent */}
           <p style={{ fontSize: "12px", color: T.textSec, marginBottom: "20px", lineHeight: 1.6 }}>
             <strong>SWV, DPV, and CV curves computed from COMPASS pipeline predictions and analytical electrochemistry for {
@@ -5649,8 +6153,8 @@ const MultiplexTab = ({ results, panelData, jobId, connected }) => {
                 })()}
               </div>
               {/* Interpretation block — Panel A */}
-              <div style={{ marginTop: "8px", padding: "10px 14px", borderRadius: "4px", background: T.primaryLight, fontSize: "11px", color: T.primaryDark, lineHeight: 1.6 }}>
-                <strong>Interpretation:</strong>{" "}
+              <div style={{ marginTop: "8px", padding: "10px 14px", borderRadius: "4px", background: "#EFF6FF", border: "1px solid #BFDBFE", fontSize: "11px", color: "#1D4ED8", lineHeight: 1.6 }}>
+                <strong style={{ color: "#1D4ED8" }}>Interpretation:</strong>{" "}
                 {echemMeta.deltaI > 50
                   ? `Strong signal reduction (${"\u0394"}I = ${echemMeta.deltaI}%). Trans-cleavage of MB reporters produces a clearly resolvable voltammetric shift at ${echemTime} min. The ${echemCandidateData.label} crRNA yields sufficient on-target activity for unambiguous electrochemical detection.`
                   : echemMeta.deltaI > 15
@@ -5752,8 +6256,8 @@ const MultiplexTab = ({ results, panelData, jobId, connected }) => {
                 })()}
               </div>
               {/* Interpretation block — Panel B */}
-              <div style={{ marginTop: "8px", padding: "10px 14px", borderRadius: "4px", background: "#F0FDF4", fontSize: "11px", color: "#166534", lineHeight: 1.6 }}>
-                <strong>Interpretation:</strong>{" "}
+              <div style={{ marginTop: "8px", padding: "10px 14px", borderRadius: "4px", background: "#EFF6FF", border: "1px solid #BFDBFE", fontSize: "11px", color: "#1D4ED8", lineHeight: 1.6 }}>
+                <strong style={{ color: "#1D4ED8" }}>Interpretation:</strong>{" "}
                 {echemTimeCourse.timeMut != null && echemTimeCourse.timeMut <= 20
                   ? `Rapid detection: MUT signal crosses the 3\u03c3 threshold at ~${echemTimeCourse.timeMut} min, well within the WHO TPP target of <120 min. `
                   : echemTimeCourse.timeMut != null
@@ -5914,8 +6418,8 @@ const MultiplexTab = ({ results, panelData, jobId, connected }) => {
                 })()}
               </div>
               {/* Interpretation block — Panel C */}
-              <div style={{ marginTop: "8px", padding: "10px 14px", borderRadius: "4px", background: "#FDF4FF", fontSize: "11px", color: "#6B21A8", lineHeight: 1.6 }}>
-                <strong>Interpretation:</strong>{" "}
+              <div style={{ marginTop: "8px", padding: "10px 14px", borderRadius: "4px", background: "#EFF6FF", border: "1px solid #BFDBFE", fontSize: "11px", color: "#1D4ED8", lineHeight: 1.6 }}>
+                <strong style={{ color: "#1D4ED8" }}>Interpretation:</strong>{" "}
                 {echemDiscOverlay.measuredDisc >= 3
                   ? `Diagnostic-grade allelic discrimination (D = ${echemDiscOverlay.measuredDisc === Infinity ? "\u221e" : echemDiscOverlay.measuredDisc + "\u00d7"}). The voltammetric \u0394I% difference between MUT and WT alleles is clearly resolvable, enabling reliable genotyping from electrochemical signal alone.`
                   : echemDiscOverlay.measuredDisc >= 1.5
@@ -5964,7 +6468,7 @@ const MultiplexTab = ({ results, panelData, jobId, connected }) => {
                       <td style={{ padding: "8px 12px", textAlign: "center", fontFamily: FONT, fontSize: "11px" }}>{d.ddg_kcal.toFixed(1)} kcal/mol</td>
                       <td style={{ padding: "8px 12px", textAlign: "center", fontFamily: FONT, fontWeight: 600, fontSize: "11px", color: d.disc_ratio >= 50 ? T.success : d.disc_ratio >= 10 ? T.warning : T.danger }}>{d.disc_ratio >= 100 ? "\u2265100" : d.disc_ratio.toFixed(0)}\u00d7</td>
                       <td style={{ padding: "8px 12px", textAlign: "center" }}>
-                        <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: "4px", fontSize: "10px", fontWeight: 500, background: blockColor + "15", color: blockColor, textTransform: "lowercase" }}>{d.block_class}</span>
+                        <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: "4px", fontSize: "10px", fontWeight: 600, background: d.block_class === "strong" ? "#ECFDF5" : d.block_class === "moderate" ? "#FFFBEB" : "#FEF2F2", color: d.block_class === "strong" ? T.success : d.block_class === "moderate" ? "#D97706" : T.danger, textTransform: "lowercase" }}>{d.block_class}</span>
                       </td>
                       <td style={{ padding: "8px 12px", textAlign: "center", fontFamily: FONT, fontSize: "11px" }}>{(d.estimated_specificity * 100).toFixed(1)}%</td>
                     </tr>
@@ -6020,6 +6524,8 @@ const DiagnosticsTab = ({ results, jobId, connected, scorer }) => {
   const [paretoLoading, setParetoLoading] = useState(false);
   const [expandedTargets, setExpandedTargets] = useState({});
   const [topKData, setTopKData] = useState({});
+  const [mcResult, setMcResult] = useState(null);
+  const [mcRunning, setMcRunning] = useState(false);
 
   // Detect which scorer produced the results
   const scorerInfo = useMemo(() => {
@@ -6034,6 +6540,27 @@ const DiagnosticsTab = ({ results, jobId, connected, scorer }) => {
   }, [results, scorer]);
 
   // Compute diagnostics client-side from results prop + preset thresholds
+  // Normalize drug codes consistently — handles full names, lowercase, and short codes
+  const normDrug = useCallback((d) => {
+    if (!d) return "";
+    const u = d.toUpperCase().trim();
+    const MAP = { RIFAMPICIN: "RIF", ISONIAZID: "INH", FLUOROQUINOLONE: "FQ", FLUOROQUINOLONES: "FQ", ETHAMBUTOL: "EMB", PYRAZINAMIDE: "PZA", AMINOGLYCOSIDE: "AG", AMIKACIN: "AG", KANAMYCIN: "AG", SPECIES_CONTROL: "OTHER" };
+    return MAP[u] || u;
+  }, []);
+
+  // Infer drug from gene name as fallback
+  const inferDrug = useCallback((label) => {
+    if (!label) return "";
+    if (label.startsWith("rpoB")) return "RIF";
+    if (label.startsWith("katG") || label.startsWith("fabG1")) return "INH";
+    if (label.startsWith("embB")) return "EMB";
+    if (label.startsWith("pncA")) return "PZA";
+    if (label.startsWith("gyrA")) return "FQ";
+    if (label.startsWith("rrs") || label.startsWith("eis")) return "AG";
+    if (label.startsWith("IS6110")) return "OTHER";
+    return "";
+  }, []);
+
   const computeLocalDiagnostics = useCallback((preset, res) => {
     try {
       if (!res || !res.length) return;
@@ -6045,8 +6572,10 @@ const DiagnosticsTab = ({ results, jobId, connected, scorer }) => {
         const eff = r.cnnCalibrated ?? r.score ?? 0;
         const disc = r.disc != null && r.disc < 900 ? r.disc : 0;
         const asrpaViable = r.strategy !== "Proximity" || !r.asrpaDiscrimination || r.asrpaDiscrimination.block_class !== "none";
-        const ready = r.hasPrimers && eff >= effT && asrpaViable && (r.strategy === "Proximity" || disc >= discT);
-        return { target_label: r.label || "unknown", drug: r.drug || "", efficiency: eff, discrimination: disc, is_assay_ready: ready, has_primers: !!r.hasPrimers, strategy: r.strategy || "Direct", asrpaViable };
+        const isControl = r.gene === "IS6110" || (normDrug(r.drug) || inferDrug(r.label)) === "OTHER";
+        const ready = isControl ? (r.hasPrimers && eff >= effT) : (r.hasPrimers && eff >= effT && asrpaViable && (r.strategy === "Proximity" || disc >= discT));
+        const drug = normDrug(r.drug) || inferDrug(r.label);
+        return { target_label: r.label || "unknown", drug, efficiency: eff, discrimination: disc, is_assay_ready: ready, has_primers: !!r.hasPrimers, strategy: r.strategy || "Direct", asrpaViable };
       });
 
       // Exclude species control (IS6110) from resistance metrics
@@ -6109,8 +6638,8 @@ const DiagnosticsTab = ({ results, jobId, connected, scorer }) => {
   // Load presets on mount — try API first, fall back to hardcoded
   useEffect(() => {
     const fallbackPresets = [
-      { name: "high_sensitivity", description: "Field screening — maximise coverage, tolerate lower discrimination.", efficiency_threshold: 0.2, discrimination_threshold: 1.5 },
       { name: "balanced", description: "WHO TPP-aligned — clinical diagnostic deployment.", efficiency_threshold: 0.4, discrimination_threshold: 3.0 },
+      { name: "high_sensitivity", description: "Field screening — maximise coverage, tolerate lower discrimination.", efficiency_threshold: 0.2, discrimination_threshold: 1.5 },
       { name: "high_specificity", description: "Confirmatory — minimise false calls, reference lab use.", efficiency_threshold: 0.6, discrimination_threshold: 5.0 },
     ];
     if (!connected) { setPresets(fallbackPresets); return; }
@@ -6353,7 +6882,7 @@ const DiagnosticsTab = ({ results, jobId, connected, scorer }) => {
           <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: "12px", marginBottom: "24px" }}>
             {[
               { label: "Sensitivity", value: `${(diagnostics.sensitivity * 100).toFixed(1)}%`, color: diagnostics.sensitivity >= 0.85 ? T.success : diagnostics.sensitivity >= 0.7 ? T.warning : T.danger, icon: TrendingUp },
-              { label: "Specificity", value: `${(diagnostics.specificity * 100).toFixed(1)}%`, color: diagnostics.specificity >= 0.80 ? T.success : diagnostics.specificity >= 0.6 ? T.warning : T.danger, icon: Shield },
+              { label: "Specificity", value: `${(diagnostics.specificity * 100).toFixed(1)}%`, color: diagnostics.specificity >= 0.98 ? T.success : diagnostics.specificity >= 0.85 ? "#d97706" : T.danger, icon: Shield },
               { label: "Coverage", value: `${diagnostics.coverage || diagnostics.assay_ready}/${diagnostics.total_targets}`, color: T.primary, icon: Target },
               { label: "Assay-Ready", value: diagnostics.assay_ready, color: T.purple, icon: CheckCircle },
             ].map(card => (
@@ -6587,7 +7116,7 @@ const DiagnosticsTab = ({ results, jobId, connected, scorer }) => {
                       const tppTarget = WHO_TPP_SENS[drug] || 0.80;
                       // Compute avg discrimination for this drug class from diagnostics per_target
                       const drugTargets = (diagnostics.per_target || []).filter(t => {
-                        const tDrug = (t.drug || "").toUpperCase().replace("RIFAMPICIN", "RIF").replace("ISONIAZID", "INH").replace("FLUOROQUINOLONE", "FQ").replace("ETHAMBUTOL", "EMB").replace("PYRAZINAMIDE", "PZA").replace("AMINOGLYCOSIDE", "AG");
+                        const tDrug = normDrug(t.drug) || inferDrug(t.target_label);
                         return tDrug === drug;
                       });
                       const discTargets = drugTargets.filter(t => t.discrimination > 0 && t.strategy === "Direct");
@@ -6612,6 +7141,24 @@ const DiagnosticsTab = ({ results, jobId, connected, scorer }) => {
                             <div>
                               <span style={{ fontFamily: FONT, fontWeight: 600, fontSize: "12px", color: data.specificity >= 0.98 ? T.success : data.specificity >= 0.90 ? T.warning : T.textTer }}>{(data.specificity * 100).toFixed(1)}%</span>
                               {data.n_excluded_specificity > 0 && <div style={{ fontSize: "9px", color: T.textTer, marginTop: "2px" }}>{data.n_excluded_specificity} excluded</div>}
+                              {/* Specificity decomposition */}
+                              {(() => {
+                                const dts = drugTargets.filter(t => t.strategy === "Direct" && t.discrimination > 0);
+                                const pts = drugTargets.filter(t => t.strategy === "Proximity");
+                                if (dts.length === 0 && pts.length === 0) return null;
+                                return (
+                                  <div style={{ fontSize: "8px", color: T.textTer, marginTop: "3px", lineHeight: 1.5, fontFamily: MONO }}>
+                                    {dts.map(dt => (
+                                      <div key={dt.target_label}>{dt.target_label.split("_").pop()}: crRNA {dt.discrimination.toFixed(1)}x {"\u2192"} {((1 - 1/Math.max(dt.discrimination, 1.01)) * 100).toFixed(0)}%</div>
+                                    ))}
+                                    {pts.map(pt => {
+                                      const orig = results.find(r => r.label === pt.target_label);
+                                      const asSpec = orig?.asrpaDiscrimination?.estimated_specificity;
+                                      return <div key={pt.target_label}>{pt.target_label.split("_").pop()}: AS-RPA {"\u2192"} {asSpec != null ? `${(asSpec * 100).toFixed(0)}%` : "~95%"}</div>;
+                                    })}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           ) : <span style={{ color: T.textTer }}>—</span>}
                         </td>
@@ -6658,6 +7205,140 @@ const DiagnosticsTab = ({ results, jobId, connected, scorer }) => {
             );
           })()}
 
+          {/* D2: Monte Carlo Robustness Analysis */}
+          {diagnostics.per_target && diagnostics.per_target.length > 0 && (() => {
+            const runMC = () => {
+              setMcRunning(true);
+              setTimeout(() => {
+                const p = presets.find(x => x.name === activePreset) || { efficiency_threshold: 0.4, discrimination_threshold: 3.0 };
+                const effT = p.efficiency_threshold || 0.4;
+                const discT = p.discrimination_threshold || 3.0;
+                const targets = diagnostics.per_target.filter(t => t.drug !== "OTHER");
+                const N = 500;
+                const sensResults = [];
+                const specResults = [];
+                for (let i = 0; i < N; i++) {
+                  let ready = 0;
+                  const specContribs = [];
+                  for (const t of targets) {
+                    const effPerturb = t.efficiency * (0.8 + Math.random() * 0.4);
+                    const discPerturb = t.discrimination * (0.8 + Math.random() * 0.4);
+                    const asrpaOk = t.strategy !== "Proximity" || true;
+                    if (effPerturb >= effT && asrpaOk && (t.strategy === "Proximity" || discPerturb >= discT)) ready++;
+                    // Specificity contribution
+                    if (t.strategy === "Proximity") {
+                      specContribs.push(0.95);
+                    } else if (t.discrimination > 0) {
+                      specContribs.push(1 - 1 / Math.max(discPerturb, 1.01));
+                    }
+                  }
+                  sensResults.push(ready / targets.length * 100);
+                  specResults.push(specContribs.length ? specContribs.reduce((a, v) => a + v, 0) / specContribs.length * 100 : 0);
+                }
+                sensResults.sort((a, b) => a - b);
+                specResults.sort((a, b) => a - b);
+                const sensMean = sensResults.reduce((a, v) => a + v, 0) / N;
+                const sensCi95Low = sensResults[Math.floor(N * 0.025)];
+                const sensCi95High = sensResults[Math.floor(N * 0.975)];
+                const specMean = specResults.reduce((a, v) => a + v, 0) / N;
+                const specCi95Low = specResults[Math.floor(N * 0.025)];
+                const specCi95High = specResults[Math.floor(N * 0.975)];
+                // Sensitivity histogram (10 bins)
+                const sensMinV = Math.floor(sensResults[0] / 10) * 10;
+                const sensMaxV = Math.ceil(sensResults[N - 1] / 10) * 10 || 100;
+                const sensBinW = Math.max((sensMaxV - sensMinV) / 10, 1);
+                const sensBins = Array.from({ length: 10 }, (_, i) => ({ lo: sensMinV + i * sensBinW, hi: sensMinV + (i + 1) * sensBinW, count: 0 }));
+                for (const v of sensResults) {
+                  const idx = Math.min(Math.floor((v - sensMinV) / sensBinW), 9);
+                  sensBins[idx].count++;
+                }
+                const sensMaxCount = Math.max(...sensBins.map(b => b.count));
+                // Specificity histogram (10 bins)
+                const specMinV = Math.floor(specResults[0] / 10) * 10;
+                const specMaxV = Math.ceil(specResults[N - 1] / 10) * 10 || 100;
+                const specBinW = Math.max((specMaxV - specMinV) / 10, 1);
+                const specBins = Array.from({ length: 10 }, (_, i) => ({ lo: specMinV + i * specBinW, hi: specMinV + (i + 1) * specBinW, count: 0 }));
+                for (const v of specResults) {
+                  const idx = Math.min(Math.floor((v - specMinV) / specBinW), 9);
+                  specBins[idx].count++;
+                }
+                const specMaxCount = Math.max(...specBins.map(b => b.count));
+                setMcResult({ sensMean, sensCi95Low, sensCi95High, sensBins, sensMaxCount, specMean, specCi95Low, specCi95High, specBins, specMaxCount, N });
+                setMcRunning(false);
+              }, 50);
+            };
+            return (
+              <CollapsibleSection title="Robustness Analysis" defaultOpen={false}>
+                <div style={{ padding: "14px 18px" }}>
+                  <div style={{ fontSize: "11px", color: T.textSec, lineHeight: 1.6, marginBottom: 12 }}>
+                    Monte Carlo robustness analysis: perturb each candidate{"'"}s activity and discrimination by {"\u00B1"}20% (uniform random, 500 iterations) and re-evaluate panel sensitivity and specificity under the current threshold profile.
+                  </div>
+                  {!mcResult ? (
+                    <button onClick={runMC} disabled={mcRunning} style={{ padding: "8px 16px", borderRadius: 4, border: `1px solid ${T.primary}`, background: mcRunning ? T.bgSub : T.primary, color: mcRunning ? T.textSec : "#fff", fontFamily: FONT, fontSize: 11, fontWeight: 600, cursor: mcRunning ? "wait" : "pointer" }}>
+                      {mcRunning ? "Running..." : "Run robustness analysis"}
+                    </button>
+                  ) : (
+                    <div>
+                      <div style={{ display: "flex", gap: 24, marginBottom: 16, flexWrap: "wrap" }}>
+                        <div style={{ textAlign: "center" }}>
+                          <div style={{ fontSize: 20, fontWeight: 700, color: T.text, fontFamily: MONO }}>{mcResult.sensMean.toFixed(1)}%</div>
+                          <div style={{ fontSize: 9, color: T.textTer }}>Mean sensitivity</div>
+                        </div>
+                        <div style={{ textAlign: "center" }}>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: T.textSec, fontFamily: MONO }}>{mcResult.sensCi95Low.toFixed(1)}% {"\u2013"} {mcResult.sensCi95High.toFixed(1)}%</div>
+                          <div style={{ fontSize: 9, color: T.textTer }}>Sensitivity 95% CI</div>
+                        </div>
+                        <div style={{ width: 1, background: T.borderLight, alignSelf: "stretch" }} />
+                        <div style={{ textAlign: "center" }}>
+                          <div style={{ fontSize: 20, fontWeight: 700, color: T.text, fontFamily: MONO }}>{mcResult.specMean.toFixed(1)}%</div>
+                          <div style={{ fontSize: 9, color: T.textTer }}>Mean specificity</div>
+                        </div>
+                        <div style={{ textAlign: "center" }}>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: T.textSec, fontFamily: MONO }}>{mcResult.specCi95Low.toFixed(1)}% {"\u2013"} {mcResult.specCi95High.toFixed(1)}%</div>
+                          <div style={{ fontSize: 9, color: T.textTer }}>Specificity 95% CI</div>
+                        </div>
+                      </div>
+                      {/* Histograms — 2 columns */}
+                      <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr", gap: 16 }}>
+                        <div>
+                          <div style={{ fontSize: 10, fontWeight: 600, color: T.textSec, marginBottom: 4 }}>Sensitivity distribution</div>
+                          <svg viewBox="0 0 300 80" style={{ width: "100%", maxWidth: 400, display: "block" }}>
+                            {mcResult.sensBins.map((b, i) => {
+                              const barH = mcResult.sensMaxCount > 0 ? (b.count / mcResult.sensMaxCount) * 60 : 0;
+                              return (
+                                <g key={i}>
+                                  <rect x={i * 30} y={65 - barH} width={28} height={barH} fill={T.primary} opacity={0.7} rx={2} />
+                                  <text x={i * 30 + 14} y={78} fontSize="7" fill={T.textTer} textAnchor="middle" fontFamily={MONO}>{b.lo.toFixed(0)}%</text>
+                                </g>
+                              );
+                            })}
+                          </svg>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 10, fontWeight: 600, color: T.textSec, marginBottom: 4 }}>Specificity distribution</div>
+                          <svg viewBox="0 0 300 80" style={{ width: "100%", maxWidth: 400, display: "block" }}>
+                            {mcResult.specBins.map((b, i) => {
+                              const barH = mcResult.specMaxCount > 0 ? (b.count / mcResult.specMaxCount) * 60 : 0;
+                              return (
+                                <g key={i}>
+                                  <rect x={i * 30} y={65 - barH} width={28} height={barH} fill="#d97706" opacity={0.7} rx={2} />
+                                  <text x={i * 30 + 14} y={78} fontSize="7" fill={T.textTer} textAnchor="middle" fontFamily={MONO}>{b.lo.toFixed(0)}%</text>
+                                </g>
+                              );
+                            })}
+                          </svg>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 9, color: T.textTer, marginTop: 8 }}>
+                        Distribution of panel sensitivity and specificity under {"\u00B1"}20% perturbation. Narrow distribution = robust panel design.
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </CollapsibleSection>
+            );
+          })()}
+
           {/* D: Per-Target Breakdown with Top-K */}
           {diagnostics.per_target && diagnostics.per_target.length > 0 && (
             <CollapsibleSection title={`Per-Target Breakdown (${diagnostics.per_target.length} targets)`} defaultOpen={false}>
@@ -6682,7 +7363,7 @@ const DiagnosticsTab = ({ results, jobId, connected, scorer }) => {
                       const disc = typeof t.discrimination === "number" ? t.discrimination : 0;
                       const effColor = eff >= 0.7 ? T.success : eff >= 0.5 ? T.warning : T.danger;
                       const discColor = disc >= 3 ? T.success : disc >= 2 ? T.warning : T.danger;
-                      const drugDisplay = (t.drug || "").toUpperCase().replace("RIFAMPICIN", "RIF").replace("ISONIAZID", "INH").replace("FLUOROQUINOLONE", "FQ").replace("ETHAMBUTOL", "EMB").replace("PYRAZINAMIDE", "PZA").replace("AMINOGLYCOSIDE", "AG").replace("SPECIES_CONTROL", "CTRL");
+                      const drugDisplay = normDrug(t.drug) || inferDrug(t.target_label) || "CTRL";
                       const stratDisplay = (t.strategy || "").charAt(0).toUpperCase() + (t.strategy || "").slice(1);
                       const toggleExpand = () => {
                         setExpandedTargets(prev => ({ ...prev, [t.target_label]: !prev[t.target_label] }));
@@ -6732,11 +7413,18 @@ const DiagnosticsTab = ({ results, jobId, connected, scorer }) => {
                             </td>
                             <td style={{ padding: "10px 12px" }}>{t.has_primers ? <CheckCircle size={14} color={T.success} /> : <span style={{ color: T.textTer }}>—</span>}</td>
                             <td style={{ padding: "10px 12px" }}>
-                              {t.is_assay_ready ? (
-                                <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", fontSize: "10px", fontWeight: 600, padding: "3px 10px", borderRadius: "3px", background: "rgba(16,185,129,0.1)", color: T.success }}>Ready</span>
-                              ) : (
-                                <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", fontSize: "10px", fontWeight: 600, padding: "3px 10px", borderRadius: "3px", background: T.bgSub, color: T.textTer }}>Not ready</span>
-                              )}
+                              {(() => {
+                                const isControl = t.drug === "OTHER" || t.target_label === "IS6110_N0N";
+                                if (isControl) return (
+                                  <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", fontSize: "10px", fontWeight: 600, padding: "3px 10px", borderRadius: "3px", background: "rgba(16,185,129,0.1)", color: T.success }}>ID Control</span>
+                                );
+                                if (t.is_assay_ready) return (
+                                  <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", fontSize: "10px", fontWeight: 600, padding: "3px 10px", borderRadius: "3px", background: "rgba(16,185,129,0.1)", color: T.success }}>Ready</span>
+                                );
+                                return (
+                                  <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", fontSize: "10px", fontWeight: 600, padding: "3px 10px", borderRadius: "3px", background: T.bgSub, color: T.textTer }}>Not ready</span>
+                                );
+                              })()}
                             </td>
                             {(() => { const orig = results.find(r => r.label === t.target_label); return orig?.riskProfile ? (<>
                               <td style={{ padding: "10px 8px", textAlign: "center" }}><RiskDot level={orig.riskProfile.overall} /></td>
@@ -6933,6 +7621,8 @@ const ResultsPage = ({ connected, jobId, scorer: scorerProp, goTo }) => {
           primer_dimer_matrix: data?.primer_dimer_matrix || null,
           primer_dimer_labels: data?.primer_dimer_labels || null,
           primer_dimer_report: data?.primer_dimer_report || null,
+          calibration: data?.calibration || null,
+          optimizer_score_trace: data?.optimizer_score_trace || null,
         });
         setLoading(false);
       });
@@ -7072,7 +7762,7 @@ const ResultsPage = ({ connected, jobId, scorer: scorerProp, goTo }) => {
           </div>
 
           {/* Tab content */}
-          {tab === "overview" && <OverviewTab results={results} scorer={scorerProp} jobId={activeJob} />}
+          {tab === "overview" && <OverviewTab results={results} scorer={scorerProp} jobId={activeJob} panelData={panelData} />}
           {tab === "candidates" && <CandidatesTab results={results} jobId={activeJob} connected={connected} scorer={scorerProp} />}
           {tab === "discrimination" && <DiscriminationTab results={results} />}
           {tab === "primers" && <PrimersTab results={results} />}

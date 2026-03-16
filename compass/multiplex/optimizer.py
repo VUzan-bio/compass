@@ -164,6 +164,7 @@ class MultiplexOptimizer:
         # --- Simulated annealing ---
         temperature = cfg.initial_temperature
         n_accepted = 0
+        score_trace: list[float] = [best_score]
 
         for iteration in range(cfg.max_iterations):
             # Pick a random target and swap to a different candidate
@@ -190,6 +191,10 @@ class MultiplexOptimizer:
                     best_score = current_score
             else:
                 current[label] = old_idx  # revert
+
+            # Record best score every 100 iterations for convergence trace
+            if (iteration + 1) % 100 == 0:
+                score_trace.append(best_score)
 
             temperature *= cfg.cooling_rate
 
@@ -230,6 +235,7 @@ class MultiplexOptimizer:
             panel_score=best_score,
             optimizer_iterations=iteration + 1,
             optimizer_temperature=temperature,
+            optimizer_score_trace=score_trace,
         )
 
         logger.info(

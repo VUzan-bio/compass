@@ -504,6 +504,8 @@ class DiscriminationScore(BaseModel):
     model_name: Optional[str] = None                # which model predicted this
     is_measured: bool = False                        # experimental vs predicted
     detection_strategy: DetectionStrategy = DetectionStrategy.DIRECT
+    confidence: Optional[float] = None  # prediction confidence (0-1)
+    feature_vector: Optional[dict[str, float]] = None  # 18 XGBoost features
 
     @property
     def ratio(self) -> float:
@@ -683,6 +685,7 @@ class MultiplexPanel(BaseModel):
     panel_score: Optional[float] = None
     optimizer_iterations: Optional[int] = None
     optimizer_temperature: Optional[float] = None
+    optimizer_score_trace: Optional[list[float]] = None
 
     @property
     def plex(self) -> int:

@@ -119,6 +119,48 @@ def _build_target_result(member: dict[str, Any]) -> TargetResult:
             elif disc_ratio is not None:
                 disc_method = "heuristic"
 
+    # Off-target report (nested under selected_candidate)
+    offtarget = selected.get("offtarget", {})
+
+    # Count off-target hits: sum of mtb + human + cross-reactivity hits
+    offtarget_hits = None
+    if offtarget:
+        mtb_hits = offtarget.get("mtb_hits", [])
+        human_hits = offtarget.get("human_hits", [])
+        xr_hits = offtarget.get("cross_reactivity_hits", [])
+        offtarget_hits = len(mtb_hits) + len(human_hits) + len(xr_hits)
+
+    # ML confidence: best confidence from ml_scores list
+    ml_confidence = None
+    for ml_entry in selected.get("ml_scores", []):
+        c = ml_entry.get("confidence")
+        if c is not None:
+            if ml_confidence is None or c > ml_confidence:
+                ml_confidence = c
+
+    # Mismatch type classification (transition vs transversion)
+    mismatch_type = None
+    ref_base_at_mut = candidate.get("ref_base_at_mutation")
+    wt_spacer = candidate.get("wt_spacer_seq")
+    spacer_seq = candidate.get("spacer_seq")
+    mm_pos = candidate.get("mutation_position_in_spacer")
+    if ref_base_at_mut and spacer_seq and mm_pos is not None:
+        # Derive mismatch_type from ref vs alt base
+        try:
+            alt_base = spacer_seq[mm_pos - 1] if mm_pos > 0 else None
+        except (IndexError, TypeError):
+            alt_base = None
+        if ref_base_at_mut and alt_base:
+            purines = {"A", "G"}
+            pyrimidines = {"C", "T"}
+            ref_upper = ref_base_at_mut.upper()
+            alt_upper = alt_base.upper()
+            if (ref_upper in purines and alt_upper in purines) or \
+               (ref_upper in pyrimidines and alt_upper in pyrimidines):
+                mismatch_type = "transition"
+            elif ref_upper != alt_upper:
+                mismatch_type = "transversion"
+
     candidate_summary = CandidateSummary(
         candidate_id=candidate.get("candidate_id", ""),
         spacer_seq=candidate.get("spacer_seq", ""),
@@ -151,16 +193,51 @@ def _build_target_result(member: dict[str, Any]) -> TargetResult:
         pam_disruption_type=selected.get("pam_disruption_type"),
         ml_scores=selected.get("ml_scores", []),
         rank=selected.get("rank"),
+        # Heuristic sub-scores
+        seed_position_score=heuristic.get("seed_position_score"),
+        gc_penalty=heuristic.get("gc_penalty"),
+        structure_penalty=heuristic.get("structure_penalty"),
+        homopolymer_penalty=heuristic.get("homopolymer_penalty"),
+        offtarget_penalty=heuristic.get("offtarget_penalty"),
+        proximity_bonus=heuristic.get("proximity_bonus"),
+        # Thermodynamic data
+        mfe=candidate.get("mfe"),
+        cumulative_dg=disc.get("cumulative_dg") if disc else None,
+        local_dg=disc.get("local_dg") if disc else None,
+        # Off-target details
+        offtarget_hits=offtarget_hits,
+        offtarget_is_clean=offtarget.get("is_clean") if offtarget else None,
+        # Discrimination model details
+        disc_confidence=disc.get("confidence") if disc else None,
+        disc_feature_vector=disc.get("feature_vector") if disc else None,
+        disc_model_name=disc.get("model_name") if disc else None,
+        # ML metadata
+        ml_confidence=ml_confidence,
+        # Mismatch details
+        mismatch_type=mismatch_type,
+        ref_base_at_mutation=ref_base_at_mut,
     ) if candidate.get("candidate_id") else None
 
     fwd_primer = None
     rev_primer = None
     amplicon_length = None
+    fwd_tm = None
+    rev_tm = None
+    fwd_gc = None
+    rev_gc = None
+    primer_dimer_dg = None
+    amplicon_seq = None
     if primers:
         fwd = primers.get("fwd", {})
         rev = primers.get("rev", {})
         fwd_primer = fwd.get("seq")
         rev_primer = rev.get("seq")
+        fwd_tm = fwd.get("tm")
+        rev_tm = rev.get("tm")
+        fwd_gc = fwd.get("gc_content")
+        rev_gc = rev.get("gc_content")
+        primer_dimer_dg = primers.get("dimer_dg")
+        amplicon_seq = primers.get("amplicon_seq")
         if fwd.get("amplicon_start") is not None and rev.get("amplicon_end") is not None:
             amplicon_length = rev["amplicon_end"] - fwd["amplicon_start"]
 
@@ -176,6 +253,12 @@ def _build_target_result(member: dict[str, Any]) -> TargetResult:
         fwd_primer=fwd_primer,
         rev_primer=rev_primer,
         amplicon_length=amplicon_length,
+        fwd_tm=fwd_tm,
+        rev_tm=rev_tm,
+        fwd_gc=fwd_gc,
+        rev_gc=rev_gc,
+        primer_dimer_dg=primer_dimer_dg,
+        amplicon_seq=amplicon_seq,
         proximity_distance=candidate.get("proximity_distance"),
         has_sm=member.get("has_sm", False),
         sm_enhanced_spacer=member.get("sm_enhanced_spacer"),
@@ -273,6 +356,21 @@ async def get_results(job_id: str) -> PipelineResultResponse:
     module_stats = [ModuleStats(**s) for s in module_stats_raw]
     total_duration_ms = result.get("total_duration_ms", 0)
 
+    # Calibration metadata: look in module_stats for ML scorer calibration info
+    calibration = None
+    for ms in module_stats_raw:
+        breakdown = ms.get("breakdown", {})
+        cal = breakdown.get("calibration")
+        if cal is not None:
+            calibration = cal
+            break
+    # Fallback: top-level calibration key
+    if calibration is None:
+        calibration = result.get("calibration")
+
+    # SA optimizer convergence trace
+    optimizer_score_trace = result.get("optimizer_score_trace")
+
     return PipelineResultResponse(
         job_id=job_id,
         panel=panel,
@@ -282,6 +380,8 @@ async def get_results(job_id: str) -> PipelineResultResponse:
         primer_dimer_matrix=result.get("primer_dimer_matrix"),
         primer_dimer_labels=result.get("primer_dimer_labels"),
         primer_dimer_report=result.get("primer_dimer_report"),
+        calibration=calibration,
+        optimizer_score_trace=optimizer_score_trace,
     )
 
 

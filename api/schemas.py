@@ -107,6 +107,35 @@ class CandidateSummary(BaseModel):
     ml_scores: list[dict] = Field(default_factory=list)
     rank: Optional[int] = None
 
+    # Heuristic sub-scores (detailed breakdown)
+    seed_position_score: Optional[float] = None
+    gc_penalty: Optional[float] = None
+    structure_penalty: Optional[float] = None
+    homopolymer_penalty: Optional[float] = None
+    offtarget_penalty: Optional[float] = None
+    proximity_bonus: Optional[float] = None
+
+    # Thermodynamic data
+    mfe: Optional[float] = None               # minimum free energy kcal/mol
+    cumulative_dg: Optional[float] = None
+    local_dg: Optional[float] = None
+
+    # Off-target details
+    offtarget_hits: Optional[int] = None
+    offtarget_is_clean: Optional[bool] = None
+
+    # Discrimination model details
+    disc_confidence: Optional[float] = None
+    disc_feature_vector: Optional[dict] = None
+    disc_model_name: Optional[str] = None
+
+    # ML metadata
+    ml_confidence: Optional[float] = None
+
+    # Mismatch details
+    mismatch_type: Optional[str] = None       # "transition" or "transversion"
+    ref_base_at_mutation: Optional[str] = None
+
 
 class TargetResult(BaseModel):
     label: str
@@ -120,6 +149,13 @@ class TargetResult(BaseModel):
     fwd_primer: Optional[str] = None
     rev_primer: Optional[str] = None
     amplicon_length: Optional[int] = None
+    # Primer details
+    fwd_tm: Optional[float] = None
+    rev_tm: Optional[float] = None
+    fwd_gc: Optional[float] = None
+    rev_gc: Optional[float] = None
+    primer_dimer_dg: Optional[float] = None
+    amplicon_seq: Optional[str] = None
     proximity_distance: Optional[int] = None
     has_sm: bool = False
     sm_enhanced_spacer: Optional[str] = None
@@ -168,6 +204,10 @@ class PipelineResultResponse(BaseModel):
     primer_dimer_matrix: Optional[list[list[float]]] = None
     primer_dimer_labels: Optional[list[str]] = None
     primer_dimer_report: Optional[dict] = None
+    # Calibration metadata
+    calibration: Optional[dict] = None        # {val_rho, temperature, alpha, model_params}
+    # SA convergence
+    optimizer_score_trace: Optional[list] = None
 
 
 # ======================================================================

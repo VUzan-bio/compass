@@ -288,12 +288,17 @@ class LearnedDiscriminationScorer(Scorer):
                 # the training distribution (simple heuristic)
                 confidence = min(1.0, max(0.3, 1.0 - abs(delta_logk - 0.57) / 2.0))
 
+                # Store the feature vector for downstream diagnostics
+                feature_values = [features.get(n, 0.0) for n in feature_names]
+
                 return DiscriminationScore(
                     wt_activity=round(wt_activity, 4),
                     mut_activity=round(mut_activity, 4),
                     model_name=self.model_name,
                     is_measured=False,
                     detection_strategy=candidate.detection_strategy,
+                    confidence=round(confidence, 4),
+                    feature_vector=dict(zip(feature_names, feature_values)),
                 )
 
         # No mismatch found

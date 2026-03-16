@@ -273,6 +273,15 @@ class AppState:
                 self._update_progress(job, 0.95, "Serializing Results")
 
                 job.result = panel.model_dump(mode="json")
+
+                # Persist calibration metadata from ML scorer
+                if hasattr(pipeline, 'ml_scorer') and getattr(pipeline.ml_scorer, 'model', None) is not None:
+                    job.result["calibration"] = {
+                        "val_rho": getattr(pipeline.ml_scorer, '_val_rho', None),
+                        "temperature": getattr(pipeline.ml_scorer, 'temperature', None) if hasattr(pipeline.ml_scorer, 'calibrated') else None,
+                        "alpha": getattr(pipeline.ml_scorer, 'alpha', None) if hasattr(pipeline.ml_scorer, 'calibrated') else None,
+                    }
+
                 job.result["module_stats"] = pipeline.last_stats
                 job.result["total_duration_ms"] = sum(
                     s.get("duration_ms", 0) for s in pipeline.last_stats
