@@ -297,11 +297,11 @@ const MODULES = [
 ];
 
 const MODULE_NAME_MAP = {
-  "Initializing": 0, "Target Resolution": 1, "PAM Scanning": 2,
-  "Candidate Filtering": 3, "Off-Target Screening": 4, "Heuristic Scoring": 5,
-  "Mismatch Pairs": 6, "SM Enhancement": 7, "Discrimination Scoring": 8,
-  "Multiplex Optimization": 9, "RPA Primer Design": 10, "Co-Selection Validation": 11,
-  "Panel Assembly": 12, "Export": 13, "Complete": 13, "Serializing Results": 13,
+  "Initializing": 0, "Target Resolution": 0, "PAM Scanning": 1,
+  "Candidate Filtering": 2, "Off-Target Screening": 3, "Heuristic Scoring": 4,
+  "Mismatch Pairs": 5, "SM Enhancement": 6, "Discrimination Scoring": 7,
+  "Multiplex Optimization": 8, "RPA Primer Design": 9, "Co-Selection Validation": 10,
+  "Panel Assembly": 11, "Export": 12, "Complete": 12, "Serializing Results": 12,
 };
 
 /* Scoring feature weights — matches compass/core/constants.py HEURISTIC_WEIGHTS exactly */
@@ -978,19 +978,20 @@ const CollapsibleSection = ({ title, children, defaultOpen = false, badge }) => 
 };
 
 /* Collapsible figure wrapper for Overview tab — open by default, click to toggle */
-const FigureSection = ({ title, children, defaultOpen = true }) => {
+const FigureSection = ({ title, subtitle, children, defaultOpen = true }) => {
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div style={{ marginBottom: "24px" }}>
       <button onClick={() => setOpen(!open)} style={{
         display: "flex", alignItems: "center", gap: "6px", background: "none", border: "none",
-        cursor: "pointer", padding: "4px 0", marginBottom: open ? "8px" : 0, fontFamily: FONT,
+        cursor: "pointer", padding: "4px 0", marginBottom: open ? (subtitle ? "2px" : "8px") : 0, fontFamily: FONT,
         fontSize: "11px", fontWeight: 600, color: T.textTer, textTransform: "uppercase",
         letterSpacing: "0.04em",
       }}>
         <ChevronDown size={12} style={{ transform: open ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.15s" }} />
         {title}
       </button>
+      {open && subtitle && <div style={{ fontSize: "11px", color: T.textTer, marginBottom: "8px", lineHeight: 1.5 }}>{subtitle}</div>}
       {open && children}
     </div>
   );
@@ -1081,7 +1082,16 @@ const HomePage = ({ goTo, connected }) => {
   };
 
   /* ── Inline pipeline management ── */
+  const cleanupPipeline = () => {
+    if (pipeTimerRef.current) { clearInterval(pipeTimerRef.current); pipeTimerRef.current = null; }
+    if (pipePollRef.current) { clearInterval(pipePollRef.current); pipePollRef.current = null; }
+    if (pipeWsRef.current) { pipeWsRef.current.close(); pipeWsRef.current = null; }
+  };
+
   const startInlinePipeline = (jobId) => {
+    // Kill any previous run's timers/connections
+    cleanupPipeline();
+
     setPipeJobId(jobId);
     setPipeStep(0);
     setPipeDone(false);
@@ -1099,6 +1109,7 @@ const HomePage = ({ goTo, connected }) => {
     }, 100);
 
     if (connected) {
+      // WS for fast updates (best-effort — proxies often break this)
       try {
         const ws = connectJobWS(jobId,
           (msg) => {
@@ -1109,13 +1120,29 @@ const HomePage = ({ goTo, connected }) => {
             if (msg.status === "complete" || msg.status === "completed") {
               finishInlinePipeline(jobId);
             }
+            if (msg.status === "failed") {
+              setError(msg.error || "Pipeline failed");
+              finishInlinePipeline(jobId);
+            }
           },
-          () => { startInlinePolling(jobId); }
+          () => {}
         );
         pipeWsRef.current = ws;
-      } catch {
-        startInlinePolling(jobId);
-      }
+      } catch { /* ignore */ }
+      // Polling is the reliable path — always run it
+      pipePollRef.current = setInterval(async () => {
+        const { data } = await getJob(jobId);
+        if (!data) return;
+        const idx = MODULE_NAME_MAP[data.current_module] ?? 0;
+        setPipeStep(idx);
+        if (data.status === "complete" || data.status === "completed") {
+          finishInlinePipeline(jobId);
+        }
+        if (data.status === "failed") {
+          setError(data.error || "Pipeline failed");
+          finishInlinePipeline(jobId);
+        }
+      }, 2000);
     } else {
       // Mock simulation
       let i = 0;
@@ -1127,24 +1154,10 @@ const HomePage = ({ goTo, connected }) => {
     }
   };
 
-  const startInlinePolling = (jobId) => {
-    pipePollRef.current = setInterval(async () => {
-      const { data } = await getJob(jobId);
-      if (data) {
-        const idx = MODULE_NAME_MAP[data.current_module] || 0;
-        setPipeStep(idx);
-        if (data.status === "complete" || data.status === "completed") {
-          finishInlinePipeline(jobId);
-          clearInterval(pipePollRef.current);
-        }
-      }
-    }, 2000);
-  };
-
   const finishInlinePipeline = (jobId) => {
     setPipeDone(true);
     setShowLog(true);
-    if (pipeTimerRef.current) clearInterval(pipeTimerRef.current);
+    cleanupPipeline();
 
     if (connected) {
       getResults(jobId).then(({ data }) => {
@@ -1174,11 +1187,7 @@ const HomePage = ({ goTo, connected }) => {
 
   // Cleanup on unmount
   useEffect(() => {
-    return () => {
-      if (pipeTimerRef.current) clearInterval(pipeTimerRef.current);
-      pipeWsRef.current?.close();
-      if (pipePollRef.current) clearInterval(pipePollRef.current);
-    };
+    return () => cleanupPipeline();
   }, []);
 
   /* Scorer-aware modules — M5 adapts to selected scoring model */
@@ -1188,9 +1197,11 @@ const HomePage = ({ goTo, connected }) => {
           ...m,
           name: "Compass-ML Scoring",
           execDesc: "Compass-ML (CNN + RNA-FM + RLPA) inference for efficiency and discrimination scoring",
+          estSec: 900,
           substeps: [
             "Loading Compass-ML checkpoint (235K params, CNN + PAM + RNA-FM + RLPA)",
-            "Computing RNA-FM embeddings (640-dim, frozen)",
+            "Downloading RNA-FM weights from HuggingFace (~1.1 GB)",
+            "Computing RNA-FM embeddings (640-dim, frozen) per candidate",
             "Running multi-scale CNN branch (kernels 3/5/7)",
             "Applying R-loop propagation attention (RLPA, 34×34)",
             "Predicting efficiency + discrimination scores per candidate",
@@ -1569,7 +1580,12 @@ const HomePage = ({ goTo, connected }) => {
         const ActiveIcon = activeModule.icon;
         const statMap = {};
         pipeStats.forEach(s => { statMap[s.module_id] = s; });
-        const fmtDur = (ms) => ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`;
+        const fmtDur = (ms) => ms >= 60000 ? `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s` : ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`;
+        const fmtElapsed = (sec) => {
+          const m = Math.floor(sec / 60);
+          const s = Math.floor(sec % 60);
+          return m > 0 ? `${m}m ${s}s` : `${sec.toFixed(1)}s`;
+        };
         const m2Out = statMap["M2"]?.candidates_out || 0;
         const finalSize = statMap["M9"]?.candidates_out || statMap["M7"]?.candidates_out || 0;
 
@@ -1580,7 +1596,7 @@ const HomePage = ({ goTo, connected }) => {
             borderRadius: "4px",
             marginBottom: "24px", overflow: "hidden",
           }}>
-            {/* Running state — module + dynamic substep cycling */}
+            {/* Running state — continuous progress bar + current module + collapsible timeline */}
             {!pipeDone && (() => {
               const stepEstSec = activeModule.estSec || 10;
               const stepElapsed = (Date.now() - pipeStepStartRef.current) / 1000;
@@ -1588,58 +1604,111 @@ const HomePage = ({ goTo, connected }) => {
               const subDur = stepEstSec / subs.length;
               const subIdx = Math.min(Math.floor(stepElapsed / Math.max(subDur, 0.5)), subs.length - 1);
               const intraStep = Math.min(0.95, 1 - Math.exp(-2.5 * stepElapsed / stepEstSec));
-              const pct = ((pipeStep + intraStep) / effectiveModules.length) * 100;
+              // Smooth overall % based on cumulative estSec weights
+              const totalEstSec = effectiveModules.reduce((s, m) => s + (m.estSec || 10), 0);
+              const doneEstSec = effectiveModules.slice(0, pipeStep).reduce((s, m) => s + (m.estSec || 10), 0);
+              const curEstSec = activeModule.estSec || 10;
+              const pct = Math.min(99, ((doneEstSec + curEstSec * intraStep) / totalEstSec) * 100);
+              const remainingStepSec = Math.max(0, stepEstSec - stepElapsed);
+              const futureModulesSec = effectiveModules.slice(pipeStep + 1).reduce((s, m) => s + (m.estSec || 10), 0);
+              const remainingSec = Math.ceil(remainingStepSec + futureModulesSec);
+              const timeText = remainingSec >= 120 ? `~${Math.round(remainingSec / 60)} min left`
+                : remainingSec >= 60 ? `~1 min left`
+                : `~${remainingSec}s left`;
               return (
                 <div style={{ padding: "16px 20px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                    <div style={{ width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", animation: "subtlePulse 2s ease-in-out infinite" }}>
+                  {/* Header: elapsed + progress % + time remaining */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <svg width="14" height="14" viewBox="0 0 16 16" style={{ animation: "spin 1s linear infinite", flexShrink: 0 }}>
+                        <circle cx="8" cy="8" r="6" fill="none" stroke={T.border} strokeWidth="2" />
+                        <path d="M8 2a6 6 0 0 1 6 6" fill="none" stroke={T.primary} strokeWidth="2" strokeLinecap="round" />
+                      </svg>
+                      <span style={{ fontFamily: MONO, fontSize: "12px", color: T.text, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>
+                        {fmtElapsed(pipeElapsed)}
+                      </span>
+                      <span style={{ fontSize: "11px", color: T.textTer }}>{"\u00b7"} {pipeStep + 1}/{effectiveModules.length} modules</span>
+                    </div>
+                    <span style={{ fontFamily: MONO, fontSize: "11px", color: T.textTer, fontVariantNumeric: "tabular-nums" }}>
+                      {Math.round(pct)}% {"\u00b7"} {timeText}
+                    </span>
+                  </div>
+                  {/* Continuous progress bar */}
+                  <div style={{ height: "6px", borderRadius: "3px", background: T.bgHover, overflow: "hidden" }}>
+                    <div style={{
+                      height: "100%", borderRadius: "3px",
+                      background: `linear-gradient(90deg, ${T.primary}, ${T.primary}dd)`,
+                      width: `${pct}%`,
+                      transition: "width 400ms ease-out",
+                    }} />
+                  </div>
+                  {/* Current module + substep */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "12px" }}>
+                    <div style={{ width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", animation: "subtlePulse 2s ease-in-out infinite", flexShrink: 0 }}>
                       <ActiveIcon size={14} color={T.primary} strokeWidth={1.8} />
                     </div>
-                    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "2px" }}>
-                      <div key={pipeStep} style={{ display: "flex", alignItems: "baseline", gap: "8px", animation: "stepSwipeUp 0.25s ease-out" }}>
-                        <span style={{ fontFamily: MONO, fontSize: "11px", color: T.textTer }}>{activeModule.id}</span>
-                        <span style={{ fontSize: "14px", fontWeight: 500, color: T.text }}>{activeModule.name}</span>
-                      </div>
-                      <div key={`sub-${pipeStep}-${subIdx}`} style={{ fontSize: "11px", color: T.textSec, lineHeight: 1.4, animation: "substepSwipe 0.35s ease-out", minHeight: "16px" }}>
-                        {subs[subIdx]}
-                      </div>
+                    <div key={pipeStep} style={{ display: "flex", alignItems: "baseline", gap: "8px", animation: "stepSwipeUp 0.25s ease-out" }}>
+                      <span style={{ fontFamily: MONO, fontSize: "10px", color: T.textTer }}>{activeModule.id}</span>
+                      <span style={{ fontSize: "13px", fontWeight: 500, color: T.text }}>{activeModule.name}</span>
                     </div>
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "2px", flexShrink: 0 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <svg width="14" height="14" viewBox="0 0 16 16" style={{ animation: "spin 1s linear infinite" }}>
-                          <circle cx="8" cy="8" r="6" fill="none" stroke={T.border} strokeWidth="2" />
-                          <path d="M8 2a6 6 0 0 1 6 6" fill="none" stroke={T.primary} strokeWidth="2" strokeLinecap="round" />
-                        </svg>
-                        <span style={{ fontFamily: MONO, fontSize: "12px", color: T.textSec, fontVariantNumeric: "tabular-nums" }}>{pipeElapsed.toFixed(1)}s</span>
-                      </div>
-                      <span style={{ fontSize: "10px", color: T.textTer, fontFamily: MONO }}>{pipeStep + 1} of {effectiveModules.length} modules</span>
+                    <span style={{ fontSize: "11px", color: T.textSec }}>{"\u2014"}</span>
+                    <div key={`sub-${pipeStep}-${subIdx}`} style={{ fontSize: "11px", color: T.textSec, animation: "substepSwipe 0.35s ease-out" }}>
+                      {subs[subIdx]}
                     </div>
                   </div>
-                  {/* Segmented progress dots */}
-                  <div style={{ display: "flex", gap: "3px", marginTop: "12px" }}>
-                    {effectiveModules.map((_, i) => (
-                      <div key={i} style={{
-                        flex: 1, height: "4px", borderRadius: "2px",
-                        background: i < pipeStep ? T.primary : i === pipeStep ? T.primary : T.bgHover,
-                        opacity: i === pipeStep ? (0.4 + 0.6 * intraStep) : 1,
-                        transition: "background 200ms ease-out, opacity 300ms ease-out",
-                      }} />
-                    ))}
-                  </div>
-                  {/* Time estimate hint — appears after 5s on same step */}
-                  {stepElapsed > 5 && (() => {
-                    const remainingStepSec = Math.max(0, stepEstSec - stepElapsed);
-                    const futureModulesSec = effectiveModules.slice(pipeStep + 1).reduce((sum, m) => sum + (m.estSec || 10), 0);
-                    const totalRemaining = Math.ceil((remainingStepSec + futureModulesSec) / 60);
-                    const remainingSec = Math.ceil(remainingStepSec + futureModulesSec);
-                    const timeText = remainingSec >= 60 ? `~${totalRemaining} min remaining` : `~${remainingSec}s remaining`;
-                    return (
-                      <div style={{ marginTop: "6px", fontSize: "11px", color: T.textTer, display: "flex", alignItems: "center", gap: "6px" }}>
-                        <Clock size={11} color={T.textTer} strokeWidth={1.8} />
-                        <span>{activeModule.name} can take a moment {"\u2014"} {timeText} ({effectiveModules.length - pipeStep - 1} modules after this)</span>
-                      </div>
-                    );
-                  })()}
+                  {/* Collapsible module timeline */}
+                  <details style={{ marginTop: "12px" }}>
+                    <summary style={{
+                      fontSize: "11px", color: T.textTer, cursor: "pointer", fontFamily: FONT,
+                      listStyle: "none", display: "flex", alignItems: "center", gap: "4px", userSelect: "none",
+                    }}>
+                      <ChevronDown size={11} color={T.textTer} strokeWidth={1.8} style={{ transition: "0.2s" }} />
+                      Module details
+                    </summary>
+                    <div style={{ marginTop: "8px", paddingTop: "8px", borderTop: `1px solid ${T.border}` }}>
+                      {effectiveModules.map((m, idx) => {
+                        const Icon = m.icon;
+                        const isDone = idx < pipeStep;
+                        const isCurrent = idx === pipeStep;
+                        const isLast = idx === effectiveModules.length - 1;
+                        const mSubs = m.substeps || [m.execDesc];
+                        return (
+                          <div key={m.id} style={{ display: "flex", gap: "0", marginBottom: isLast ? 0 : "2px" }}>
+                            {/* Timeline rail */}
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "24px", flexShrink: 0 }}>
+                              <div style={{
+                                width: "20px", height: "20px", borderRadius: "5px", display: "flex", alignItems: "center", justifyContent: "center",
+                                background: isDone ? T.primary + "18" : isCurrent ? T.primary + "18" : T.bgSub,
+                                border: `1px solid ${isDone ? T.primary + "40" : isCurrent ? T.primary + "60" : T.border}`,
+                              }}>
+                                {isDone ? <Check size={10} color={T.success} strokeWidth={2.5} />
+                                  : <Icon size={10} color={isCurrent ? T.primary : T.textTer} strokeWidth={1.8} />}
+                              </div>
+                              {!isLast && <div style={{ width: "1px", flex: 1, minHeight: "4px", background: isDone ? T.primary + "30" : T.border }} />}
+                            </div>
+                            {/* Content */}
+                            <div style={{ flex: 1, paddingLeft: "10px", paddingBottom: isLast ? 0 : "4px" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                <span style={{ fontFamily: MONO, fontSize: "9px", color: T.textTer }}>{m.id}</span>
+                                <span style={{ fontSize: "12px", fontWeight: isCurrent ? 600 : 400, color: isDone || isCurrent ? T.text : T.textTer }}>{m.name}</span>
+                                {isCurrent && <span style={{ fontSize: "9px", color: T.primary, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px" }}>running</span>}
+                              </div>
+                              {isCurrent && (
+                                <div style={{ marginTop: "4px", display: "flex", flexDirection: "column", gap: "2px", paddingLeft: "2px" }}>
+                                  {mSubs.map((sub, si) => (
+                                    <div key={si} style={{ fontSize: "10px", color: si <= subIdx ? T.textSec : T.textTer, lineHeight: 1.4, display: "flex", alignItems: "center", gap: "4px" }}>
+                                      {si < subIdx ? <Check size={8} color={T.success} strokeWidth={2.5} /> : si === subIdx ? <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: T.primary, animation: "subtlePulse 2s ease-in-out infinite" }} /> : <span style={{ display: "inline-block", width: 8 }} />}
+                                      {sub}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </details>
                 </div>
               );
             })()}
@@ -1654,7 +1723,7 @@ const HomePage = ({ goTo, connected }) => {
                       Pipeline complete
                     </span>
                     <span style={{ fontSize: "13px", color: T.textSec, fontFamily: MONO }}>
-                      {pipeElapsed.toFixed(1)}s
+                      {fmtElapsed(pipeElapsed)}
                       {m2Out > 0 && ` · ${m2Out} candidates`}
                       {finalSize > 0 && ` · ${finalSize} selected`}
                     </span>
@@ -2651,6 +2720,37 @@ const UMAPPanel = ({ jobId }) => {
 /* ═══════════════════════════════════════════════════════════════════
    RESULT TABS
    ═══════════════════════════════════════════════════════════════════ */
+/* ─── Reusable collapsible in silico caveat banner ─── */
+const InSilicoCaveat = () => {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ background: "#FFFBEB", border: "1px solid #F59E0B33", borderRadius: "4px", marginBottom: "20px", overflow: "hidden" }}>
+      <button onClick={() => setOpen(!open)} style={{ width: "100%", background: "none", border: "none", cursor: "pointer", padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <AlertTriangle size={14} color="#D97706" strokeWidth={2} />
+          <span style={{ fontSize: "12px", fontWeight: 600, color: "#92400E" }}>In silico prediction — experimental validation required</span>
+        </div>
+        <ChevronDown size={14} color="#D97706" style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />
+      </button>
+      {open && (
+        <div style={{ padding: "0 16px 14px", fontSize: "11px", color: "#92400E", lineHeight: 1.7 }}>
+          <p style={{ margin: "0 0 6px" }}>
+            <strong>Activity scores</strong> are predicted by Compass-ML (CNN + RNA-FM + RLPA) trained on human cell cis-cleavage data (Kim et al. 2018).
+            The ranking between candidates is informative for synthesis prioritisation, but absolute values are not proportional to electrochemical signal on LIG electrodes.
+          </p>
+          <p style={{ margin: "0 0 6px" }}>
+            <strong>Discrimination ratios</strong> (XGBoost, 18 thermodynamic features) are trained on 6,136 paired trans-cleavage measurements (Huang et al. 2024, LbCas12a).
+            These are the most reliable in silico metric. Actual enAsCas12a discrimination on the electrochemical platform requires experimental confirmation.
+          </p>
+          <p style={{ margin: 0 }}>
+            All predictions serve as a starting point for the wet-lab validation workflow on the deMello group{"\u2019"}s LIG electrode platform.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const OverviewTab = ({ results, scorer, jobId }) => {
   const mobile = useIsMobile();
 
@@ -2716,43 +2816,12 @@ const OverviewTab = ({ results, scorer, jobId }) => {
           </div>
         </div>
 
-        {/* Three evidence columns */}
+        {/* Three evidence columns — reordered: confidence → discrimination → readiness */}
         <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr 1fr", gap: mobile ? "16px" : "12px" }}>
-          {/* Column 1: Can we detect resistance? */}
+          {/* Column 1: How confident are we? (discrimination — most important metric) */}
           <div style={{ background: T.bgSub, borderRadius: "6px", padding: "16px 20px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "10px", fontWeight: 600, color: T.textTer, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "14px" }}>
-              <Shield size={11} color={T.textTer} strokeWidth={2} />
-              Can we detect resistance?
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: T.textSec }}>
-                  <Package size={12} color={T.textTer} strokeWidth={1.8} />
-                  Drug classes
-                </span>
-                <span style={{ fontSize: "20px", fontWeight: 600, color: T.text, fontFamily: FONT }}>{drugs.length}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: T.textSec }}>
-                  <Crosshair size={12} color={T.textTer} strokeWidth={1.8} />
-                  Primer coverage
-                </span>
-                <span style={{ fontSize: "20px", fontWeight: 600, color: sensitivity === 100 ? T.success : T.warning, fontFamily: FONT }}>{sensitivity}%</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: T.textSec }}>
-                  <GitBranch size={12} color={T.textTer} strokeWidth={1.8} />
-                  Detection split
-                </span>
-                <span style={{ fontSize: "13px", fontWeight: 600, color: T.textSec, fontFamily: FONT }}>{directCount} direct · {proximityCount} prox</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Column 2: How confident are we? */}
-          <div style={{ background: T.bgSub, borderRadius: "6px", padding: "16px 20px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "10px", fontWeight: 600, color: T.textTer, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "14px" }}>
-              <Activity size={11} color={T.textTer} strokeWidth={2} />
+              <TrendingUp size={11} color={T.textTer} strokeWidth={2} />
               How confident are we?
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -2786,27 +2855,44 @@ const OverviewTab = ({ results, scorer, jobId }) => {
                   <span style={{ fontSize: "17px", fontWeight: 600, color: T.textSec, fontFamily: FONT }}>{avgPamAdj}</span>
                 </div>
               )}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: T.textSec }}>
-                  <BarChart3 size={12} color={T.textTer} strokeWidth={1.8} />
-                  Activity range
-                </span>
-                <span style={{ fontSize: "13px", fontWeight: 600, color: T.textSec, fontFamily: FONT }}>{minScore} – {maxScore}</span>
-              </div>
-              {usesCompassMl && modelAgreement != null && (
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: T.textSec }}>
-                    <Brain size={12} color={T.textTer} strokeWidth={1.8} />
-                    Model ρ (heuristic vs net)
-                  </span>
-                  <span style={{ fontSize: "13px", fontWeight: 600, color: T.textSec, fontFamily: FONT }}>{modelAgreement}</span>
-                </div>
-              )}
               <div style={{ fontSize: "10px", color: T.textTer, marginTop: "2px", paddingLeft: "16px" }}>
                 Disc model: {discModel}
               </div>
             </div>
           </div>
+
+          {/* Column 2: Can we detect resistance? */}
+          <div style={{ background: T.bgSub, borderRadius: "6px", padding: "16px 20px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "10px", fontWeight: 600, color: T.textTer, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "14px" }}>
+              <Shield size={11} color={T.textTer} strokeWidth={2} />
+              Can we detect resistance?
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: T.textSec }}>
+                  <Package size={12} color={T.textTer} strokeWidth={1.8} />
+                  Drug classes
+                </span>
+                <span style={{ fontSize: "20px", fontWeight: 600, color: T.text, fontFamily: FONT }}>{drugs.length}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: T.textSec }}>
+                  <Crosshair size={12} color={T.textTer} strokeWidth={1.8} />
+                  Primer coverage
+                </span>
+                <span style={{ fontSize: "20px", fontWeight: 600, color: sensitivity === 100 ? T.success : T.warning, fontFamily: FONT }}>{sensitivity}%</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: T.textSec }}>
+                  <GitBranch size={12} color={T.textTer} strokeWidth={1.8} />
+                  Detection split
+                </span>
+                <span style={{ fontSize: "13px", fontWeight: 600, color: T.textSec, fontFamily: FONT }}>{directCount} direct · {proximityCount} prox</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Old Column 2 removed — content moved to Column 1 */}
 
           {/* Column 3: What's missing? */}
           <div style={{ background: T.bgSub, borderRadius: "6px", padding: "16px 20px" }}>
@@ -2898,15 +2984,17 @@ const OverviewTab = ({ results, scorer, jobId }) => {
         </div>
       </div>
 
+      <InSilicoCaveat />
+
       {/* Risk Assessment Matrix */}
       {results.some(r => r.riskProfile != null) && (
-        <FigureSection title="Risk Assessment Matrix">
+        <FigureSection title="Risk Assessment Matrix" subtitle={`${results.length} targets scored across 5 biophysical axes — green = safe, amber = moderate risk, red = requires attention.`}>
           <RiskMatrix results={results} />
         </FigureSection>
       )}
 
       {/* Diagnostic Readiness Score Chart */}
-      <FigureSection title="Diagnostic Readiness Score">
+      <FigureSection title="Diagnostic Readiness Score" subtitle="Each line is one candidate across 5 readiness axes. Strong candidates stay high. Colored by drug class.">
         <ReadinessChart results={results} />
       </FigureSection>
 
@@ -4180,6 +4268,7 @@ const DiscriminationTab = ({ results }) => {
 
   return (
     <div>
+      <InSilicoCaveat />
       {/* Blue explainer */}
       <div style={{ background: T.primaryLight, border: `1px solid ${T.primary}33`, borderRadius: "4px", padding: mobile ? "16px" : "20px 24px", marginBottom: "24px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
@@ -4453,6 +4542,7 @@ const PrimersTab = ({ results }) => {
 
   return (
     <div>
+      <InSilicoCaveat />
       {/* RPA Explanation */}
       <div style={{ background: T.primaryLight, border: `1px solid ${T.primary}33`, borderRadius: "4px", padding: mobile ? "16px" : "20px 24px", marginBottom: "24px", display: "flex", gap: "14px", alignItems: "flex-start" }}>
         <Crosshair size={20} color={T.primaryDark} style={{ flexShrink: 0, marginTop: 2 }} />
@@ -5105,6 +5195,7 @@ const MultiplexTab = ({ results, panelData, jobId, connected }) => {
 
   return (
     <div>
+      <InSilicoCaveat />
       {/* ── Explainer box ── */}
       <div style={{ background: T.primaryLight, border: `1px solid ${T.primary}25`, borderRadius: "4px", padding: mobile ? "14px" : "16px 20px", marginBottom: "16px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
@@ -6164,6 +6255,7 @@ const DiagnosticsTab = ({ results, jobId, connected, scorer }) => {
 
   return (
     <div>
+      <InSilicoCaveat />
       {/* ── Explainer box ── */}
       <div style={{ background: T.primaryLight, border: `1px solid ${T.primary}25`, borderRadius: "4px", padding: mobile ? "14px" : "16px 20px", marginBottom: "16px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
