@@ -160,7 +160,7 @@ class HeuristicDiscriminationScorer(Scorer):
                 detection_strategy=strategy,
             )
 
-        # DIRECT: compute from mismatch profile
+        # DIRECT: compute from mismatch profile (multiplicative heuristic)
         wt_activity = self._compute_activity_vs_target(
             candidate, pair, target="wt"
         )
@@ -168,10 +168,54 @@ class HeuristicDiscriminationScorer(Scorer):
             candidate, pair, target="mut"
         )
 
+        # Blend with R-loop physics estimate when available
+        d_rloop = None
+        try:
+            import sys
+            from pathlib import Path as _P
+            _cnd = _P(__file__).resolve().parent.parent.parent / "compass-net" / "data"
+            if str(_cnd) not in sys.path:
+                sys.path.insert(0, str(_cnd))
+            from thermo_discrimination_features import compute_rloop_discrimination
+
+            wt_spacer = pair.wt_spacer
+            mut_spacer = pair.mut_spacer
+            if wt_spacer and mut_spacer and len(wt_spacer) == len(mut_spacer):
+                for i in range(len(wt_spacer)):
+                    if wt_spacer[i].upper() != mut_spacer[i].upper():
+                        from compass.scoring.learned_discrimination import (
+                            _classify_rna_dna_mismatch, _DNA_TO_RNA,
+                        )
+                        rna_b = _DNA_TO_RNA.get(mut_spacer[i].upper(), "N")
+                        mm_type = _classify_rna_dna_mismatch(rna_b, wt_spacer[i].upper())
+                        pam = candidate.pam_seq if hasattr(candidate, "pam_seq") else "TTTV"
+                        rloop = compute_rloop_discrimination(
+                            guide_seq=pam + mut_spacer,
+                            spacer_position=i + 1,
+                            mismatch_type=mm_type,
+                        )
+                        d_rloop = rloop["d_rloop"]
+                        break
+        except Exception:
+            pass
+
+        if d_rloop is not None and wt_activity > 0:
+            import math
+            d_heuristic = mut_activity / wt_activity
+            # Geometric mean blend (alpha=0.4 gives physics slightly more weight
+            # in the heuristic path since we have no learned model)
+            alpha = 0.4
+            d_blend = math.exp(
+                (1 - alpha) * math.log(max(d_heuristic, 1e-6))
+                + alpha * math.log(max(d_rloop, 1e-6))
+            )
+            wt_activity = 1.0 / max(d_blend, 1e-6)
+            mut_activity = 1.0
+
         return DiscriminationScore(
             wt_activity=wt_activity,
             mut_activity=mut_activity,
-            model_name="heuristic_discrimination",
+            model_name="heuristic+rloop" if d_rloop is not None else "heuristic_discrimination",
             is_measured=False,
             detection_strategy=strategy,
         )

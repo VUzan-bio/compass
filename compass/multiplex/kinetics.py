@@ -1,8 +1,8 @@
 """In situ RNP formation kinetics for spatially-addressed electrode array.
 
-Models the detection process on each LIG electrode pad as a phase breakdown
+Models the detection process on each LIG-E (cellulose-derived) electrode pad as a phase breakdown
 rather than per-target absolute time estimates.  The dominant experimental
-unknown is the effective trans-cleavage rate on LIG-tethered MB-ssDNA
+unknown is the effective trans-cleavage rate on LIG-E-tethered MB-ssDNA
 reporters, which has not been measured directly.
 
 Kinetic parameters (literature-verified):

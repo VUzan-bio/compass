@@ -65,7 +65,9 @@ OFFTARGET_TAIL_WEIGHT = 0.5
 # Published M.tb RPA assays use Tm 62–70°C (Ai et al. 2019, Cao et al. 2018).
 #
 # BRIDGE project: blood cfDNA input. Circulating free DNA fragments are
-# ~100–160 bp (median ~140 bp, Lo et al. 2010; Mouliere et al. 2018).
+# ~100–160 bp (median ~140 bp for human cfDNA; Lo et al. 2010,
+# Mouliere et al. 2018). M.tb cfDNA fragment sizes may differ
+# (bacterial DNA lacks nucleosomal packaging).
 # Hard cap at 120 bp ensures the full amplicon fits within a single cfDNA
 # fragment — longer amplicons span fragment junctions and fail to amplify.
 # ---------------------------------------------------------------------------

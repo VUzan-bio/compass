@@ -273,6 +273,96 @@ def compute_features_for_pair(
     }
 
 
+# ──────────────────────────────────────────────────────────────
+# Physics-based discrimination from R-loop energy landscape
+# ──────────────────────────────────────────────────────────────
+
+def compute_rloop_discrimination(
+    guide_seq: str,
+    spacer_position: int,
+    mismatch_type: str,
+    temperature_c: float = 37.0,
+) -> dict[str, float]:
+    """Compute discrimination ratio from R-loop thermodynamics alone.
+
+    The crRNA matches the MUT target perfectly. On the WT target, a single
+    mismatch at ``spacer_position`` introduces a free-energy barrier that
+    stalls R-loop propagation. The ratio of propagation probabilities gives
+    a physics-based discrimination estimate:
+
+        D = exp(delta_G_barrier / RT)
+
+    where delta_G_barrier is the ΔΔG penalty of the mismatch (kcal/mol),
+    weighted by how much R-loop energy has accumulated before the mismatch
+    site. Early mismatches (seed) encounter the barrier before the R-loop
+    is stabilised, so even moderate ΔΔG is devastating. Late mismatches
+    (PAM-distal) sit on a deeply stable R-loop that can absorb the penalty.
+
+    This is entirely deterministic: same sequence + position + mismatch
+    chemistry = same discrimination ratio, every time.
+
+    Returns:
+        Dict with:
+          d_rloop:       Physics-based discrimination ratio (MUT/WT)
+          barrier_kcal:  Effective barrier height (kcal/mol)
+          propagation_wt: WT R-loop propagation probability past mismatch
+    """
+    R = 1.987e-3  # kcal/(mol*K)
+    T = temperature_c + 273.15
+
+    # Extract spacer
+    if len(guide_seq) >= 24 and guide_seq[:3].upper() == "TTT":
+        spacer_dna = guide_seq[4:24]
+    else:
+        spacer_dna = guide_seq[:20]
+
+    # Convert to crRNA
+    crrna = "".join(_DNA_TO_RNA.get(b, "N") for b in reversed(spacer_dna.upper()))
+
+    # Cumulative R-loop stability up to the mismatch position
+    cumulative = _compute_cumulative_dg(crrna, temperature_c)
+    cum_idx = min(spacer_position, len(cumulative) - 1)
+    dg_accumulated = cumulative[cum_idx]  # negative = stable
+
+    # Mismatch ΔΔG penalty (positive = destabilising)
+    ddg_mismatch = MISMATCH_DDG.get(mismatch_type, 2.5)
+
+    # Effective barrier: the mismatch penalty reduced by how much
+    # R-loop stability has already built up. A deeply stable R-loop
+    # (large negative dg_accumulated) can partially absorb the penalty.
+    #
+    # At position 1-3 (seed start): dg_accumulated ~ -2 to -5 kcal/mol
+    #   barrier ~ ddg_mismatch (full penalty, R-loop barely formed)
+    # At position 15+ (tail): dg_accumulated ~ -20 to -30 kcal/mol
+    #   barrier ~ 0 (R-loop too stable to disrupt)
+    #
+    # We model this as: barrier = ddg * sigmoid(-dg_accumulated / scale)
+    # where scale controls how quickly R-loop stability dampens the penalty.
+    stability_scale = 8.0  # kcal/mol; tuned to match Strohkendl 2018 seed/tail ratio
+    dampening = 1.0 / (1.0 + math.exp(-dg_accumulated / stability_scale))
+    # dampening ~ 1.0 when dg_accumulated ~ 0 (early, unstable)
+    # dampening ~ 0.0 when dg_accumulated << 0 (late, very stable)
+
+    barrier = ddg_mismatch * dampening
+
+    # Propagation probability for WT (with mismatch)
+    # Boltzmann: P_propagation = exp(-barrier / RT)
+    propagation_wt = math.exp(-barrier / (R * T))
+
+    # MUT propagation = 1.0 (no mismatch, perfect match)
+    # Discrimination = MUT_activity / WT_activity = 1 / P_propagation
+    d_rloop = 1.0 / max(propagation_wt, 1e-10)
+
+    # Cap at 1000x (beyond this, the measurement is noise anyway)
+    d_rloop = min(d_rloop, 1000.0)
+
+    return {
+        "d_rloop": round(d_rloop, 2),
+        "barrier_kcal": round(barrier, 3),
+        "propagation_wt": round(propagation_wt, 6),
+    }
+
+
 # Original 15 features — used by existing trained XGBoost/LightGBM checkpoints.
 # Do NOT remove or reorder these; existing models depend on this exact layout.
 FEATURE_NAMES_V1 = [

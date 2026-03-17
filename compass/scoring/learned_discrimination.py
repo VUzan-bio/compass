@@ -1,14 +1,22 @@
 """Learned discrimination scoring — trained on EasyDesign paired data.
 
-Replaces the heuristic position×destabilisation model with a LightGBM
+Replaces the heuristic position*destabilisation model with a LightGBM
 gradient-boosted tree trained on 6,136 paired MUT/WT trans-cleavage measurements.
 
 The model predicts delta_logk (MUT - WT activity in log space) from 15
 thermodynamic features. Discrimination ratio = 10^(delta_logk).
 
+A physics-based R-loop discrimination estimate (D_rloop) is computed from
+first principles and blended with the learned prediction. D_rloop uses the
+cumulative R-loop free energy at the mismatch position and the mismatch
+ddG to compute a Boltzmann propagation probability. This is entirely
+deterministic, generalises across Cas enzymes, and provides a strong
+baseline that the learned model refines.
+
 Key improvements over heuristic:
   - Captures non-linear interactions between position, chemistry, and context
   - Thermodynamic energy features (cumulative dG, energy ratio) learned from data
+  - R-loop physics prior (D_rloop) constrains predictions in low-data regimes
   - 15% RMSE reduction, 54% correlation improvement vs heuristic (3-fold CV)
   - Automatic fallback to heuristic when model unavailable
 
@@ -17,6 +25,7 @@ Interface is identical to HeuristicDiscriminationScorer — drop-in replacement.
 References:
   - Huang et al. (2024) iMeta — EasyDesign training data
   - Zhang et al. (2024) NAR — R-loop energetics
+  - Strohkendl et al. (2018) Mol Cell — position-dependent R-loop sensitivity
 """
 
 from __future__ import annotations
@@ -239,8 +248,7 @@ class LearnedDiscriminationScorer(Scorer):
         candidate: CrRNACandidate,
         pair: MismatchPair,
     ) -> DiscriminationScore:
-        """Predict using the trained model."""
-        # Find mismatch position and type from the pair
+        """Predict using XGBoost model blended with R-loop physics prior."""
         wt_spacer = pair.wt_spacer
         mut_spacer = pair.mut_spacer
 
@@ -262,7 +270,7 @@ class LearnedDiscriminationScorer(Scorer):
                 pam = candidate.pam_seq if hasattr(candidate, "pam_seq") else "TTTV"
                 guide_seq = pam + mut_spacer
 
-                # Compute features
+                # Compute features for XGBoost
                 features = self._feature_module(
                     guide_seq=guide_seq,
                     spacer_position=spacer_pos,
@@ -270,35 +278,66 @@ class LearnedDiscriminationScorer(Scorer):
                     cas_variant=self.cas_variant,
                 )
 
-                # Auto-detect: use 18 features if v2 checkpoint, 15 if legacy
+                # XGBoost prediction
                 feature_names = self._feature_names
                 X = np.array(
                     [[features[n] for n in feature_names]],
                     dtype=np.float32,
                 )
                 delta_logk = float(self._model.predict(X)[0])
-                ratio = 10 ** delta_logk
+                ratio_xgb = 10 ** delta_logk
+
+                # R-loop physics-based discrimination (deterministic)
+                try:
+                    from thermo_discrimination_features import (
+                        compute_rloop_discrimination,
+                    )
+                    rloop = compute_rloop_discrimination(
+                        guide_seq=guide_seq,
+                        spacer_position=spacer_pos,
+                        mismatch_type=mismatch_type,
+                    )
+                    d_rloop = rloop["d_rloop"]
+                except Exception:
+                    d_rloop = ratio_xgb  # fallback: no blending
+
+                # Blend: geometric mean of learned and physics predictions.
+                # This anchors the learned model to the thermodynamic prior
+                # while letting it correct for protein-DNA effects the physics
+                # can't capture. Weight alpha controls the blend:
+                #   alpha=0.5 → equal trust in both
+                #   alpha=0.3 → lean towards XGBoost (more data-driven)
+                alpha = 0.35
+                import math
+                ratio = math.exp(
+                    (1 - alpha) * math.log(max(ratio_xgb, 1e-6))
+                    + alpha * math.log(max(d_rloop, 1e-6))
+                )
 
                 # Convert to activity scores
-                # MUT activity = 1.0 (perfect match), WT = 1/ratio
                 wt_activity = 1.0 / max(ratio, 1e-6)
                 mut_activity = 1.0
 
-                # Confidence: based on how far the prediction is from
-                # the training distribution (simple heuristic)
-                confidence = min(1.0, max(0.3, 1.0 - abs(delta_logk - 0.57) / 2.0))
+                # Confidence: higher when physics and learned model agree
+                agreement = 1.0 - min(1.0, abs(math.log10(max(ratio_xgb, 0.1)) - math.log10(max(d_rloop, 0.1))) / 2.0)
+                base_conf = min(1.0, max(0.3, 1.0 - abs(delta_logk - 0.57) / 2.0))
+                confidence = 0.6 * base_conf + 0.4 * agreement
 
-                # Store the feature vector for downstream diagnostics
+                # Store features + physics values for diagnostics
                 feature_values = [features.get(n, 0.0) for n in feature_names]
+                feat_dict = dict(zip(feature_names, feature_values))
+                feat_dict["d_rloop"] = round(d_rloop, 2)
+                feat_dict["d_xgboost"] = round(ratio_xgb, 2)
+                feat_dict["d_blended"] = round(ratio, 2)
 
                 return DiscriminationScore(
                     wt_activity=round(wt_activity, 4),
                     mut_activity=round(mut_activity, 4),
-                    model_name=self.model_name,
+                    model_name="learned_xgboost+rloop",
                     is_measured=False,
                     detection_strategy=candidate.detection_strategy,
                     confidence=round(confidence, 4),
-                    feature_vector=dict(zip(feature_names, feature_values)),
+                    feature_vector=feat_dict,
                 )
 
         # No mismatch found

@@ -204,7 +204,7 @@ const MOCK_CROSS_REACTIVITY = (() => {
     same_gene_pairs: sameGenePairs,
     panel_safe: highRisk.length === 0,
     none_count: noneCount,
-    interpretation: "All cross-reactive pairs occur between same-gene targets sharing overlapping amplicons. In the spatially multiplexed paper electrode array, each detection zone is physically isolated by wax-printed hydrophobic barriers, so cross-reactivity between zones is impossible. These scores are relevant only for hypothetical solution-phase multiplex formats.",
+    interpretation: "In silico estimate (same-gene pairs from sequence homology; inter-gene pairs are conservative upper bounds, not experimentally measured). In the spatially multiplexed paper electrode array, each detection zone is physically isolated by wax-printed hydrophobic barriers, so cross-reactivity between zones is impossible. These scores are relevant only for hypothetical solution-phase multiplex formats.",
   };
 })();
 
@@ -350,6 +350,9 @@ const BIBLIOGRAPHY = [
   { id: "strohkendl2018", authors: "Strohkendl I, Saifuddin FA, Rybarski JR, et al.", year: 2018, title: "Kinetic basis for DNA target specificity of CRISPR-Cas12a", journal: "Molecular Cell", doi: "10.1016/j.molcel.2018.06.043", pmid: "30078724", category: "CRISPR Biology" },
   { id: "kleinstiver2019", authors: "Kleinstiver BP, Sousa AA, Walton RT, et al.", year: 2019, title: "Engineered CRISPR-Cas12a variants with increased activities and improved targeting ranges", journal: "Nature Biotechnology", doi: "10.1038/s41587-018-0011-0", pmid: "30742127", category: "CRISPR Biology" },
   { id: "strohkendl2024", authors: "Strohkendl I, Saha A, Moy C, et al.", year: 2024, title: "Cas12a domain flexibility guides R-loop formation and forces RuvC resetting", journal: "Molecular Cell", doi: "10.1016/j.molcel.2024.05.032", category: "CRISPR Biology" },
+  // RNA:DNA Thermodynamics
+  { id: "sugimoto1995", authors: "Sugimoto N, Nakano S, Katoh M, et al.", year: 1995, title: "Thermodynamic parameters to predict stability of RNA/DNA hybrid duplexes", journal: "Biochemistry", doi: "10.1021/bi00035a029", pmid: "7545436", category: "R-Loop Thermodynamics" },
+  { id: "sugimoto2000", authors: "Sugimoto N, Nakano M, Nakano S", year: 2000, title: "Thermodynamics-structure relationship of single mismatches in RNA/DNA duplexes", journal: "Biochemistry", doi: "10.1021/bi000819p", category: "R-Loop Thermodynamics" },
   // R-Loop Thermodynamics
   { id: "zhang2024", authors: "Zhang J, Guan X, Moon J, et al.", year: 2024, title: "Interpreting CRISPR-Cas12a enzyme kinetics through free energy change of nucleic acids", journal: "Nucleic Acids Research", doi: "10.1093/nar/gkae1124", category: "R-Loop Thermodynamics" },
   { id: "aris2025", authors: "Aris KDP, Cofsky JC, Shi H, et al.", year: 2025, title: "Dynamic basis of supercoiling-dependent DNA interrogation by Cas12a via R-loop intermediates", journal: "Nature Communications", doi: "10.1038/s41467-025-57703-y", category: "R-Loop Thermodynamics" },
@@ -367,9 +370,13 @@ const BIBLIOGRAPHY = [
   // CRISPR Diagnostics
   { id: "broughton2020", authors: "Broughton JP, Deng X, Yu G, et al.", year: 2020, title: "CRISPR-Cas12-based detection of SARS-CoV-2", journal: "Nature Biotechnology", doi: "10.1038/s41587-020-0513-4", pmid: "32300245", category: "CRISPR Diagnostics" },
   { id: "ai2019", authors: "Ai JW, Zhou X, Xu T, et al.", year: 2019, title: "CRISPR-based rapid and ultra-sensitive diagnostic test for Mycobacterium tuberculosis", journal: "Emerging Microbes & Infections", doi: "10.1080/22221751.2019.1664939", pmid: "31522608", category: "CRISPR Diagnostics" },
+  { id: "bezinge2023", authors: "Bezinge L, Shih CJ, deMello AJ, et al.", year: 2023, title: "Paper-Based Laser-Pyrolyzed Electrofluidics: An Electrochemical Platform for Capillary-Driven Diagnostic Bioassays", journal: "Advanced Materials", doi: "10.1002/adma.202302893", category: "Electrochemical Platform" },
+  { id: "sueangam2021", authors: "Suea-Ngam A, Howes PD, Stanley CE, deMello AJ", year: 2021, title: "An amplification-free ultra-sensitive electrochemical CRISPR/Cas biosensor for drug-resistant bacteria detection", journal: "Chemical Science", doi: "10.1039/D1SC02197D", pmid: "34703560", category: "Electrochemical Platform" },
+  { id: "lesinski2024", authors: "Lesinski AM, Aksoy YA, Bhatt A, et al.", year: 2024, title: "Kinetic Characterization of the CRISPR-Cas12a Trans-Cleavage Reaction Using Surface Plasmon Resonance", journal: "Analytical Chemistry", doi: "10.1021/acs.analchem.4c03600", category: "Electrochemical Platform" },
+  { id: "kohabir2024", authors: "Kohabir KAV, Noori N, Engstr\u00f6m JOA, et al.", year: 2024, title: "Synthetic mismatches enable specific CRISPR-Cas12a-based detection of genome-wide SNVs tracked by ARTEMIS", journal: "Cell Reports Methods", doi: "10.1016/j.crmeth.2024.100912", category: "CRISPR Diagnostics" },
   // Bioinformatics
   { id: "langmead2012", authors: "Langmead B, Salzberg SL", year: 2012, title: "Fast gapped-read alignment with Bowtie 2", journal: "Nature Methods", doi: "10.1038/nmeth.1923", pmid: "22388286", category: "Bioinformatics" },
-  { id: "piepenburg2006", authors: "Piepenburg O, Williams CH, Stemple DL, Armes NA", year: 2006, title: "DNA detection using recombination proteins", journal: "PLoS Biology", doi: "10.1371/journal.pbio.0040204", pmid: "16756388", category: "Bioinformatics" },
+  { id: "piepenburg2006", authors: "Piepenburg O, Williams CH, Stemple DL, Armes NA", year: 2006, title: "DNA detection using recombination proteins", journal: "PLoS Biology", doi: "10.1371/journal.pbio.0040204", pmid: "16756388", category: "Isothermal Amplification" },
 ];
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -1930,7 +1937,7 @@ const MethodsPage = () => {
         <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "repeat(4, 1fr)", gap: "0", border: `1px solid ${T.border}`, borderRadius: "4px", overflow: "hidden" }}>
           {[
             { n: "01", icon: Map, title: "Define targets", desc: "Resolve WHO catalogue mutations to H37Rv genomic coordinates, codon context, and drug class annotations.", color: T.primary },
-            { n: "02", icon: Brain, title: "Score candidates", desc: "Scan PAM sites, generate crRNAs, and predict activity with Compass-ML trained on 15K cis-cleavage measurements.", color: T.primary },
+            { n: "02", icon: Brain, title: "Score candidates", desc: "Scan PAM sites, generate crRNAs, and predict activity with Compass-ML trained on Kim et al. 2018 high-throughput AsCas12a indel data (~15K targets).", color: T.primary },
             { n: "03", icon: Zap, title: "Optimise panel", desc: "Simulated annealing over candidate assignments with co-designed AS-RPA primers and multiplex constraints.", color: T.primaryDark },
             { n: "04", icon: Shield, title: "Assess clinically", desc: "Evaluate against WHO TPP thresholds for per-drug sensitivity, specificity, and three operating modes.", color: T.success },
           ].map((c, i) => (
@@ -1956,8 +1963,8 @@ const MethodsPage = () => {
           {[
             { label: "PARAMETERS", value: "235K" },
             { label: "VAL \u03c1", value: "0.750" },
-            { label: "DISC r", value: "0.57" },
-            { label: "PAM", value: "9-class" },
+            { label: "DISC \u03c1 (XGB)", value: "0.57" },
+            { label: "PAM", value: "9-class encoding" },
             { label: "INFERENCE", value: "<1ms" },
           ].map((s, i) => (
             <div key={s.label} style={{ flex: 1, padding: "14px 12px", textAlign: "center", borderLeft: i > 0 ? `1px solid ${T.border}` : "none" }}>
@@ -1971,7 +1978,7 @@ const MethodsPage = () => {
         <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr 1fr", gap: "12px", marginBottom: "20px" }}>
           {[
             { tag: "CNN", title: "Target DNA Branch", desc: "Multi-scale convolutions (k=3,5,7) scan the 34-nt target context for PAM quality, seed composition, and dinucleotide patterns." },
-            { tag: "RNA-FM", title: "Guide RNA Branch", desc: "Pre-trained foundation model (23M sequences) captures folding stability and accessibility governing Cas12a loading." },
+            { tag: "RNA-FM", title: "Guide RNA Branch", desc: "Pre-trained foundation model (~23.7M non-coding RNA sequences) captures folding stability and accessibility governing Cas12a loading." },
             { tag: "RLPA", title: "R-Loop Propagation", desc: "Directional attention encodes PAM-proximal to distal R-loop propagation. Ablation: +0.1% over CNN+PAM+RNA-FM (consistent across 3 seeds)." },
           ].map(c => (
             <div key={c.tag} style={{ padding: "16px", border: `1px solid ${T.border}`, borderRadius: "4px" }}>
@@ -2002,7 +2009,7 @@ const MethodsPage = () => {
 
         {/* Benchmark callout */}
         <div style={{ background: T.bgSub, border: `1px solid ${T.border}`, borderRadius: "4px", padding: "12px 16px", fontSize: "12px", color: T.textSec, lineHeight: 1.65 }}>
-          <strong style={{ color: T.text }}>Benchmark:</strong> Full architecture (CNN + PAM + RNA-FM + RLPA) achieves {"\u03c1"} = 0.750 on Kim 2018 HT1-2 validation (best of 3 seeds). Ablation: CNN-only {"\u03c1"} = 0.740, +PAM = 0.741, +RNA-FM = 0.744, +RLPA = 0.745. DeepCpf1 baseline {"\u03c1"} = 0.71.
+          <strong style={{ color: T.text }}>Benchmark:</strong> Full architecture (CNN + PAM + RNA-FM + RLPA) achieves {"\u03c1"} = 0.750 on Kim 2018 HT1-2 validation (best of 3 seeds). Ablation: CNN-only {"\u03c1"} = 0.740, +PAM = 0.741, +RNA-FM = 0.744, +RLPA = 0.745. DeepCpf1 baseline (Kim 2018, Spearman, re-evaluated on HT1-2) {"\u03c1"} = 0.71.
         </div>
       </Section>
 
@@ -2056,7 +2063,7 @@ const MethodsPage = () => {
       {/* ═══════════ 5. DISCRIMINATION THRESHOLDS ═══════════ */}
       <Section id="discrimination" title="Discrimination Thresholds" subtitle="Mismatch discrimination determines clinical deployment tier">
         <p style={{ fontSize: "12px", color: T.textSec, lineHeight: 1.6, margin: "0 0 16px" }}>
-          For Direct candidates: Cas12a cleavage ratio (MUT/WT) predicted by XGBoost on 18 thermodynamic features (r=0.57, trained on 6,136 EasyDesign pairs). For Proximity candidates: AS-RPA primer selectivity.
+          For Direct candidates: Cas12a cleavage ratio (MUT/WT) predicted by XGBoost on 18 thermodynamic features (Spearman \u03c1 = 0.57, trained on 6,136 paired MUT/WT measurements curated from Huang et al. 2024, LbCas12a). For Proximity candidates: AS-RPA primer selectivity.
         </p>
 
         <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: "0", border: `1px solid ${T.border}`, borderRadius: "4px", overflow: "hidden", marginBottom: "16px" }}>
@@ -2078,7 +2085,7 @@ const MethodsPage = () => {
         <div style={{ background: T.bgSub, border: `1px solid ${T.border}`, borderRadius: "4px", padding: "12px 16px" }}>
           <div style={{ fontSize: "12px", fontWeight: 600, color: T.text, marginBottom: "4px" }}>Synthetic Mismatch Enhancement</div>
           <div style={{ fontSize: "12px", color: T.textSec, lineHeight: 1.6 }}>
-            For candidates with insufficient discrimination, deliberate mismatches within the seed region (positions 1{"\u2013"}8) destabilize wildtype binding while preserving mutant recognition. Published improvements of 6{"\u2013"}7.5{"\u00d7"} at PAM+4 (Kohabir et al. 2024), with up to {">"}10{"\u00d7"} in favourable seed contexts (Chen et al. 2018; Teng et al. 2019).
+            For candidates with insufficient discrimination, deliberate mismatches within the seed region (positions 1{"\u2013"}8) destabilize wildtype binding while preserving mutant recognition. Kohabir et al. (2024, Cell Reports Methods) demonstrated improvements of 6{"\u2013"}7.5{"\u00d7"} at PAM+4 (Kohabir et al. 2024), with up to {">"}10{"\u00d7"} in favourable seed contexts (Chen et al. 2018; Teng et al. 2019).
           </div>
         </div>
       </Section>
@@ -2091,11 +2098,11 @@ const MethodsPage = () => {
         <div>
           {[
             ["Variant", "WT AsCas12a / enAsCas12a (selectable)"],
-            ["PAM", "TTTV (WT) + 8 expanded motifs (enAsCas12a)"],
-            ["crRNA", "19 nt direct repeat + 20\u201323 nt spacer"],
+            ["PAM", "TTTV (canonical) + expanded non-canonical PAMs (enAsCas12a, Kleinstiver et al. 2019)"],
+            ["crRNA", "20 nt scaffold (pseudoknot) + 20\u201323 nt spacer"],
             ["Trans-cleavage", "Non-specific ssDNase (reporter activation)"],
             ["Temperature", "37\u00b0C (RPA-compatible)"],
-            ["Readouts", "Electrochemical (SWV on LIG) \u00b7 lateral flow \u00b7 fluorescence"],
+            ["Readouts", "Electrochemical (SWV on LIG-E) \u00b7 lateral flow \u00b7 fluorescence"],
           ].map(([k, v]) => <KV key={k} label={k} value={v} />)}
         </div>
       </Section>
@@ -2107,7 +2114,7 @@ const MethodsPage = () => {
             ["PAM", "TTTV + 8 expanded", "enAsCas12a: 9 PAM variants with activity penalties"],
             ["Spacer length", "20\u201323 nt", "20 canonical; 21\u201323 for high-GC targets"],
             ["GC range", "40\u201385%", "TB-adjusted (genome 65.6% GC)"],
-            ["Max homopolymer", "4 nt", "Poly-T \u22655 causes R-loop stalling"],
+            ["Max homopolymer", "4 nt", "Poly-runs \u22655 risk polymerase slippage during RPA and crRNA misfolding"],
             ["Off-target", "\u22643 mismatches", "Bowtie2 against full genome"],
             ["RPA amplicon", "80\u2013120 bp", "Optimised for blood cfDNA (~140 bp median)"],
             ["Discrimination min", "2.0\u00d7", "\u22653.0\u00d7 for electrochemical/LFA"],
@@ -2126,13 +2133,15 @@ const MethodsPage = () => {
         <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr", gap: "10px" }}>
           {[
             { title: "Discrimination prediction", text: "XGBoost (18 features) r=0.57 on 6,136 EasyDesign pairs. pam_to_mm_distance is top feature. Heuristic baseline r\u22480.30." },
-            { title: "Training domain shift", text: "Trained on WT AsCas12a/LbCas12a, deployed on enAsCas12a. Human cell lines \u2192 M.tb (65.6% GC)." },
+            { title: "Training domain shift", text: "Efficiency trained on AsCas12a (Kim 2018), discrimination on LbCas12a (Huang 2024), deployed on enAsCas12a. Human cell lines \u2192 M.tb (65.6% GC). Cross-enzyme generalisation assumed but not experimentally validated." },
             { title: "AS-RPA specificity", text: "Boltzmann thermodynamic estimates, not experimentally validated. Ratios >100\u00d7 are capped." },
             { title: "Multiplex compatibility", text: "Cross-reactivity by sequence homology. Primer dimer stability predicted but not yet in SA cost function." },
+            { title: "Blood cfDNA variability", text: "M.tb cfDNA is detectable in only ~50-60% of smear-positive patients (Lancet Microbe 2022). Paucibacillary and HIV-coinfected cases may have undetectable levels. cfDNA fragment sizes may differ from the ~140 bp human nucleosomal fragments used to set the 120 bp amplicon cap." },
             { title: "Shared amplicons", text: "Targets in same gene region may share amplicons. Cannot resolve specific amino acid changes without distinct crRNA reporters." },
             { title: "Amplicon folding", text: "No \u0394G_fold calculation. GC-rich M.tb amplicons risk stable hairpins blocking recombinase invasion." },
-            { title: "Specificity estimates", text: "Proxy formula (1\u22121/disc) assumes separated distributions. Real specificity depends on signal variance." },
+            { title: "Specificity estimates", text: "Theoretical upper bound (1\u22121/D) assuming zero signal variance. Real specificity on LIG-E electrodes will be lower due to intra-device CV (~5% RSD) and electrode-to-electrode variability." },
             { title: "Reporter independence", text: "Compass-ML predicts Cas12a trans-cleavage, not reporter chemistry. Absolute signal is platform-dependent." },
+            { title: "Bedaquiline (BDQ) not covered", text: "The 2024 WHO TPP update added BDQ as a minimum criterion for next-generation DST. The current 14-plex panel does not include BDQ resistance markers (Rv0678, atpE). Future panel revisions should incorporate BDQ targets." },
           ].map((item, i) => (
             <div key={i} style={{ padding: "14px 16px", border: `1px solid ${T.borderLight}`, borderRadius: "4px" }}>
               <div style={{ fontSize: "12px", fontWeight: 600, color: T.text, marginBottom: "4px" }}>{item.title}</div>
@@ -2791,13 +2800,13 @@ const InSilicoCaveat = () => {
       {open && (
         <div style={{ background: "#FFFBEB", border: "1px solid #F59E0B33", borderRadius: "4px", padding: "12px 16px", fontSize: "11px", color: "#92400E", lineHeight: 1.7 }}>
           <p style={{ margin: "0 0 6px" }}>
-            Activity scores are predicted by Compass-ML (CNN + RNA-FM + RLPA) trained on human cell cis-cleavage data (Kim et al. 2018). The ranking between candidates is informative for synthesis prioritisation, but absolute values are not proportional to electrochemical signal on LIG electrodes.
+            Activity scores are predicted by Compass-ML (CNN + RNA-FM + RLPA) trained on human cell cis-cleavage data (Kim et al. 2018). The ranking between candidates is informative for synthesis prioritisation, but absolute values are not proportional to electrochemical signal on LIG-E (paper-based) electrodes.
           </p>
           <p style={{ margin: "0 0 6px" }}>
             Discrimination ratios (XGBoost, 18 thermodynamic features) are trained on 6,136 paired trans-cleavage measurements (Huang et al. 2024, LbCas12a). These are the most reliable in silico metric. Actual enAsCas12a discrimination on the electrochemical platform requires experimental confirmation.
           </p>
           <p style={{ margin: 0 }}>
-            All predictions serve as a starting point for the wet-lab validation workflow on the deMello group's LIG electrode platform.
+            All predictions serve as a starting point for the wet-lab validation workflow on the deMello group's paper-based electrochemical platform (Bezinge et al. 2023).
           </p>
         </div>
       )}
@@ -4462,7 +4471,7 @@ const CrossReactivityMatrix = () => {
             color: data.panel_safe ? "#059669" : "#DC2626",
             fontFamily: MONO,
           }}>
-            {data.panel_safe ? <><CheckCircle size={14} color="#059669" strokeWidth={2} style={{ display: "inline", verticalAlign: "middle" }} /> SAFE</> : "\u26A0 REVIEW"} for spatially multiplexed electrode array
+            {data.panel_safe ? <><CheckCircle size={14} color="#059669" strokeWidth={2} style={{ display: "inline", verticalAlign: "middle" }} /> SAFE (in silico)</> : "\u26A0 REVIEW"} for spatially multiplexed electrode array
           </span>
         </div>
         {data.same_gene_pairs.length > 0 && (
@@ -5030,7 +5039,7 @@ const PrimersTab = ({ results }) => {
           <p style={{ fontSize: "13px", color: T.primaryDark, lineHeight: 1.6, margin: 0, opacity: 0.85 }}>
             RPA is an isothermal amplification method (37°C) that replaces PCR thermocycling. Each crRNA target needs a pair of
             30–35 nt primers flanking an 80–120 bp amplicon containing the crRNA binding site. The amplified product is then
-            detected by Cas12a trans-cleavage of MB-ssDNA reporters on the electrochemical platform (SWV signal decrease on LIG electrodes).
+            detected by Cas12a trans-cleavage of MB-ssDNA reporters on the electrochemical platform (SWV signal decrease on LIG-E (cellulose-derived) electrodes).
           </p>
           <div style={{ display: "flex", alignItems: "flex-start", gap: "8px", marginTop: "10px", padding: "8px 12px", background: "rgba(255,255,255,0.5)", borderRadius: "4px", border: `1px solid ${T.primary}22` }}>
             <Droplet size={14} color={T.primaryDark} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} />
@@ -5178,7 +5187,7 @@ const MultiplexTab = ({ results, panelData, jobId, connected }) => {
   const [echemTechnique, setEchemTechnique] = useState("SWV");
   const [echemTime, setEchemTime] = useState(30);       // minutes
   const [echemBloodTiter, setEchemBloodTiter] = useState(100); // cp/mL
-  const [echemKtrans, setEchemKtrans] = useState(0.02); // s⁻¹ (mid-range estimate for LIG-AuNP surface trans-cleavage, 0.01–0.1 s⁻¹)
+  const [echemKtrans, setEchemKtrans] = useState(0.02); // s⁻¹ (mid-range estimate for LIG-E surface trans-cleavage on cellulose, 0.01–0.1 s⁻¹)
   const [echemAdvanced, setEchemAdvanced] = useState(false);
   const [echemGamma0, setEchemGamma0] = useState(1.5e11); // molecules/cm²
   const [echemPorosity, setEchemPorosity] = useState(3);
@@ -5206,7 +5215,7 @@ const MultiplexTab = ({ results, panelData, jobId, connected }) => {
       { param: "k_trans (surface, estimated)", value: "0.01\u20130.1 s\u207b\u00b9", source: "Estimated", note: "Key experimental unknown." },
       { param: "[Cas12a]", value: "50 nM", source: "Design parameter", note: null },
       { param: "[crRNA] on pad", value: "~200 nM equivalent", source: "Design parameter", note: "Effective concentration after rehydration unknown." },
-      { param: "MB-ssDNA probe density", value: "~10\u00b9\u2070\u201310\u00b9\u00b9 molecules/cm\u00b2", source: "Estimated for LIG", note: "Geometric density. Effective density is higher due to LIG porosity (3\u201310\u00d7 surface area). Directly affects signal magnitude and time-to-detection." },
+      { param: "MB-ssDNA probe density", value: "~10\u00b9\u2070\u201310\u00b9\u00b9 molecules/cm\u00b2", source: "Estimated for LIG", note: "Geometric density (estimated). Effective density is higher due to LIG-E porosity (3\u201310\u00d7 surface area). Directly affects signal magnitude and time-to-detection." },
     ],
     insights: [
       { title: "Rate-limiting step", text: "Surface trans-cleavage of tethered MB-ssDNA reporters dominates detection time, not RNP formation or target recognition." },
@@ -8327,6 +8336,7 @@ const ResearchPage = ({ connected }) => {
   const tdStyle = { padding: "8px 12px", fontSize: "12px", fontFamily: FONT, color: RS.text };
 
   // Heuristic feature weights for waterfall chart
+  // Approximate default weights for M.tb; actual values are organism-specific
   const HEURISTIC_WEIGHTS = [
     { name: "Seed position", key: "seed", weight: 0.30 },
     { name: "GC content", key: "gc", weight: 0.20 },
@@ -8351,7 +8361,7 @@ const ResearchPage = ({ connected }) => {
         <div style={{ fontSize: "11px", fontWeight: 600, color: RS.accent, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "8px" }}>Research</div>
         <h2 style={{ fontSize: "20px", fontWeight: 600, color: RS.text, margin: 0, letterSpacing: "-0.02em", fontFamily: HEADING }}>Scoring R&D Sandbox</h2>
         <p style={{ fontSize: "13px", color: RS.muted, marginTop: "8px", lineHeight: 1.7, maxWidth: "720px" }}>
-          Experimental workspace for scoring model development. Results here are exploratory; they inform model selection and feature engineering but do not affect production panel design. All thermodynamic calculations use nearest-neighbor parameters (Sugimoto et al. 1995 for RNA:DNA; SantaLucia 1998 for DNA:DNA) and are approximations of the true molecular energetics.
+          Experimental workspace for scoring model development. Results here are exploratory; they inform model selection and feature engineering but do not affect production panel design. All thermodynamic calculations use nearest-neighbor parameters (Sugimoto et al. 1995 for Watson-Crick RNA:DNA hybrids; Sugimoto et al. 2000 for RNA:DNA mismatch penalties; SantaLucia 1998 for DNA:DNA duplex stability) and are approximations of the true molecular energetics.
         </p>
       </div>
 
@@ -8513,9 +8523,9 @@ const ResearchPage = ({ connected }) => {
             <div style={{ marginTop: "10px", padding: "16px 20px", background: RS.cardBg, border: `1px solid ${RS.border}`, borderRadius: "4px", fontSize: "12px", color: RS.muted, lineHeight: 1.8 }}>
               <p style={{ margin: "0 0 10px 0" }}>R-loop formation is the rate-limiting step of CRISPR-Cas12a target recognition (Strohkendl et al., Molecular Cell 2018; 2024). The crRNA spacer hybridises to the target strand of dsDNA, displacing the non-target strand, in a sequential PAM-proximal to PAM-distal process. Each dinucleotide step contributes a free energy increment that depends on the base-pair identity (nearest-neighbor model).</p>
               <p style={{ margin: "0 0 10px 0" }}>Zhang et al. (Nucleic Acids Research 2024, DOI: 10.1093/nar/gkae1124) demonstrated a linear correlation between Cas12a trans-cleavage kinetics and the free energy change required to unwind the crRNA spacer and DNA target from their self-folded states to a hybridisation-competent conformation. This "unwinding cost" is the dominant predictor of trans-cleavage rate.</p>
-              <p style={{ margin: "0 0 10px 0" }}>CRISPRzip (Offerhaus et al., bioRxiv 2025) formalises R-loop formation as movement through a sequence-dependent free-energy landscape, combining nearest-neighbor RNA:DNA hybrid energetics with protein-mediated contributions inferred from high-throughput kinetics.</p>
+              <p style={{ margin: "0 0 10px 0" }}>CRISPRzip (Offerhaus et al., bioRxiv 2025) formalises SpCas9 R-loop formation as movement through a sequence-dependent free-energy landscape, combining nearest-neighbor RNA:DNA hybrid energetics with protein-mediated contributions inferred from high-throughput kinetics. The nearest-neighbor energetics framework is adaptable to Cas12a, though the protein-mediated contributions and R-loop directionality differ between the two enzymes.</p>
               <p style={{ margin: "0 0 10px 0" }}>Aris et al. (Nature Communications 2025, DOI: 10.1038/s41467-025-57703-y) established a four-state kinetic model for Cas12a R-loop dynamics using single-molecule measurements, showing that R-loop formation is dynamic and reversible, with supercoiling-dependent interrogation.</p>
-              <p style={{ margin: 0, fontSize: "11px", color: "#a3a3a3" }}>The profiles shown here use the Sugimoto et al. (1995) nearest-neighbor parameters for RNA:DNA hybrid thermodynamics and the SantaLucia (1998) unified parameters for DNA:DNA duplex stability. These are approximations. The true free-energy landscape includes protein-mediated contributions, supercoiling effects, and PAM-proximal protein contacts that stabilise early R-loop intermediates beyond what nucleic acid thermodynamics alone predict.</p>
+              <p style={{ margin: 0, fontSize: "11px", color: "#a3a3a3" }}>The profiles shown here use the Sugimoto et al. (1995) nearest-neighbor parameters for Watson-Crick RNA:DNA hybrid thermodynamics, Sugimoto et al. (2000) for RNA:DNA mismatch penalties, and the SantaLucia (1998) unified parameters for DNA:DNA duplex stability. These are approximations. The true free-energy landscape includes protein-mediated contributions, supercoiling effects, and PAM-proximal protein contacts that stabilise early R-loop intermediates beyond what nucleic acid thermodynamics alone predict.</p>
             </div>
           )}
         </div>
@@ -8735,7 +8745,7 @@ const ResearchPage = ({ connected }) => {
                 {/* Protein stabilisation note */}
                 {netDg >= 0 && (
                   <div style={{ marginTop: "12px", padding: "10px 14px", background: RS.seedBg, borderRadius: "4px", fontSize: "11px", color: RS.text, lineHeight: 1.6 }}>
-                    <strong>Note:</strong> The positive net dG indicates that nucleic acid thermodynamics alone do not favour R-loop formation at this target. Cas12a protein provides 10{"\u2013"}30 kcal/mol of additional stabilisation through PAM recognition, REC domain contacts, and conformational coupling (Strohkendl et al. 2024; CRISPRzip, Offerhaus et al. 2025). The hybrid dG ({(eb.hybrid_formation_dg || 0).toFixed(2)} kcal/mol) remains the best available predictor of relative guide performance across candidates, as the protein contribution is approximately constant.
+                    <strong>Note:</strong> The positive net dG indicates that nucleic acid thermodynamics alone do not favour R-loop formation at this target. Cas12a protein provides substantial additional stabilisation (estimated order of magnitude: 10+ kcal/mol) through PAM recognition, REC domain contacts, and conformational coupling (Strohkendl et al. 2018, 2024). The exact protein contribution for Cas12a has not been directly measured in free-energy units. The hybrid dG ({(eb.hybrid_formation_dg || 0).toFixed(2)} kcal/mol) remains the best available predictor of relative guide performance across candidates, as the protein contribution is approximately constant.
                   </div>
                 )}
                 {/* References */}
@@ -8823,7 +8833,7 @@ const ResearchPage = ({ connected }) => {
 
               {/* Insight box */}
               <div style={{ padding: "12px 16px", background: RS.seedBg, borderRadius: "4px", fontSize: "12px", color: RS.text, lineHeight: 1.7, marginBottom: "16px" }}>
-                <strong>Key finding:</strong> Models optimised for cis-cleavage gene editing (Kim 2018 benchmark) show near-zero predictive value for diagnostic trans-cleavage (rho = 0.04). The production checkpoint (multi-dataset, no domain adversarial) achieves rho = 0.55 on trans-cleavage while retaining rho = 0.49 on cis-cleavage; the best all-rounder across both benchmarks. Domain-adversarial training (Ganin et al., JMLR 2016) is counter-productive: forcing domain invariance destroys trans-cleavage-specific signal.
+                <strong>Key finding:</strong> Models optimised for cis-cleavage gene editing (Kim 2018 benchmark) show near-zero predictive value for diagnostic trans-cleavage (rho = 0.04, COMPASS internal evaluation). The production checkpoint (multi-dataset, no domain adversarial) achieves rho = 0.55 on trans-cleavage while retaining rho = 0.49 on cis-cleavage; the best all-rounder across both benchmarks. Domain-adversarial training (Ganin et al., JMLR 2016) is counter-productive: forcing domain invariance destroys trans-cleavage-specific signal.
               </div>
 
               {/* Table */}
