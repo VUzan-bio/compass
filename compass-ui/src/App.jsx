@@ -2783,12 +2783,7 @@ const InSilicoCaveat = () => {
   const [open, setOpen] = useState(false);
   return (
     <div style={{ marginBottom: "20px" }}>
-      <button onClick={() => setOpen(!open)} style={{
-        display: "flex", alignItems: "center", gap: "6px", background: "none", border: "none",
-        cursor: "pointer", padding: "4px 0", marginBottom: open ? "2px" : 0, fontFamily: FONT,
-        fontSize: "11px", fontWeight: 600, color: "#92400E", textTransform: "uppercase",
-        letterSpacing: "0.04em",
-      }}>
+      <button onClick={() => setOpen(!open)} style={{ display: "flex", alignItems: "center", gap: "6px", background: "none", border: "none", cursor: "pointer", padding: "4px 0", marginBottom: open ? "2px" : 0, fontFamily: FONT, fontSize: "11px", fontWeight: 600, color: "#92400E", textTransform: "uppercase", letterSpacing: "0.04em" }}>
         <ChevronDown size={12} style={{ transform: open ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.15s", color: "#D97706" }} />
         <AlertTriangle size={12} color="#D97706" strokeWidth={2} />
         In silico prediction: experimental validation required
@@ -4970,7 +4965,7 @@ const DiscriminationTab = ({ results }) => {
                           <span style={{ fontFamily: MONO, fontWeight: 600 }}>{d.terminal_mismatch || "N/A"}</span>
                           {d.terminal_mismatch && (
                             <span style={{ color: T.textSec, marginLeft: "4px" }}>
-                              ({d.block_class === "none" ? "Watson-Crick pair \u2014 no blocking" : d.block_class === "strong" ? "purine\u00B7purine clash \u2014 strong steric block" : "pyrimidine mismatch \u2014 moderate block"})
+                              ({d.block_class === "none" ? "Watson-Crick pair, no blocking" : d.block_class === "strong" ? "purine\u00B7purine clash, strong steric block" : "pyrimidine mismatch, moderate block"})
                             </span>
                           )}
                           <span style={{ margin: "0 8px", color: T.borderLight }}>{"\u2502"}</span>
@@ -5211,10 +5206,10 @@ const MultiplexTab = ({ results, panelData, jobId, connected }) => {
       { param: "k_trans (surface, estimated)", value: "0.01\u20130.1 s\u207b\u00b9", source: "Estimated", note: "Key experimental unknown." },
       { param: "[Cas12a]", value: "50 nM", source: "Design parameter", note: null },
       { param: "[crRNA] on pad", value: "~200 nM equivalent", source: "Design parameter", note: "Effective concentration after rehydration unknown." },
-      { param: "MB-ssDNA probe density", value: "~10\u00b9\u2070\u201310\u00b9\u00b9 molecules/cm\u00b2", source: "Estimated for LIG", note: "Geometric density \u2014 effective density is higher due to LIG porosity (3\u201310\u00d7 surface area). Directly affects signal magnitude and time-to-detection." },
+      { param: "MB-ssDNA probe density", value: "~10\u00b9\u2070\u201310\u00b9\u00b9 molecules/cm\u00b2", source: "Estimated for LIG", note: "Geometric density. Effective density is higher due to LIG porosity (3\u201310\u00d7 surface area). Directly affects signal magnitude and time-to-detection." },
     ],
     insights: [
-      { title: "Rate-limiting step", text: "Surface trans-cleavage of tethered MB-ssDNA reporters dominates detection time \u2014 not RNP formation or target recognition." },
+      { title: "Rate-limiting step", text: "Surface trans-cleavage of tethered MB-ssDNA reporters dominates detection time, not RNP formation or target recognition." },
       { title: "In situ complexation", text: "Lesinski et al. 2024: reduces effective [RNP] during the first ~5 minutes by ~10-fold vs pre-complexed format. This prevents Cas12a from destroying target amplicons before detection begins." },
       { title: "Experimental unknowns", text: "k_trans on LIG-tethered MB-ssDNA and crRNA rehydration kinetics have not been measured. These are key characterisation priorities." },
       { title: "Capacitive background", text: "SWV simulation models Faradaic current only. Real LIG electrodes have capacitive (non-Faradaic) baseline from double-layer charging on high-surface-area graphene foam. Signal-to-noise ratio in practice depends on the Faradaic-to-capacitive current ratio." },
@@ -5999,6 +5994,11 @@ const MultiplexTab = ({ results, panelData, jobId, connected }) => {
                 <strong style={{ color: T.text }}>{echemCandidateData.label}</strong>
                 {" \u00b7 "}{"\u0394"}I% = <span style={{ fontWeight: 600, color: EC.purple }}>{echemMeta.deltaI}%</span>
                 {" \u00b7 "}{echemArch === "C" ? (Math.abs(echemMeta.peakBase) * 1000).toFixed(1) : Math.abs(echemMeta.peakBase).toFixed(3)} {echemArch === "C" ? "nA" : "\u03bcA"} {"\u2192"} {echemArch === "C" ? (Math.abs(echemMeta.peakAfter) * 1000).toFixed(1) : Math.abs(echemMeta.peakAfter).toFixed(3)} {echemArch === "C" ? "nA" : "\u03bcA"}
+                {echemCandidateData.discrimination <= 2.0 && echemCandidateData.discrimination < 900 && (
+                  <div style={{ marginTop: "4px", padding: "3px 8px", background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: "3px", fontSize: "9px", color: "#1D4ED8", lineHeight: 1.5, fontFamily: FONT }}>
+                    D = {echemCandidateData.discrimination.toFixed(1)}{"\u00d7"} - WT allele {"\u0394"}I% {"\u2248"} MUT {"\u0394"}I% (S_eff_WT = {(echemCandidateData.efficiency / echemCandidateData.discrimination).toFixed(3)}). Clinical discrimination relies entirely on AS-RPA primer selectivity, not crRNA alone.
+                  </div>
+                )}
               </div>
               <div style={{ width: "100%", height: 280 }}>
                 {(() => {
@@ -6476,7 +6476,7 @@ const MultiplexTab = ({ results, panelData, jobId, connected }) => {
             </table>
           </div>
           <div style={{ fontSize: "10px", color: T.textTer, marginTop: "8px" }}>
-            Discrimination ratios computed via Boltzmann conversion: exp({"\u0394\u0394"}G / RT) at 37 {"\u00b0"}C. Ratios &gt; 100{"\u00d7"} capped {"\u2014"} kinetic effects dominate at high {"\u0394\u0394"}G.
+            Discrimination ratios computed via Boltzmann conversion: exp({"\u0394\u0394"}G / RT) at 37 {"\u00b0"}C. Ratios &gt; 100{"\u00d7"} capped; kinetic effects dominate at high {"\u0394\u0394"}G.
           </div>
         </div>
       </CollapsibleSection>

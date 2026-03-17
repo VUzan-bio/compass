@@ -3,6 +3,9 @@
 The pipeline is CPU-bound (sequence scanning, thermodynamic calculations).
 We use ThreadPoolExecutor rather than asyncio because the pipeline is
 synchronous Python. FastAPI endpoints are async but delegate to the pool.
+
+max_workers=2 allows two concurrent pipeline runs. Each run needs ~1-2 GB
+RAM and 4 PyTorch threads, so 2 is the practical limit on Railway 8 GB.
 """
 
 from __future__ import annotations
@@ -22,6 +25,86 @@ from typing import Any, Optional
 from api.schemas import JobStatus, MutationInput, PipelineMode
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Global model cache: load heavy objects once, reuse across pipeline runs.
+# Each run gets its own scorer *instance* (with mutable state like
+# _collected_embeddings) but shares the expensive torch model + RNA-FM cache.
+# ---------------------------------------------------------------------------
+_model_cache_lock = threading.Lock()
+_cached_torch_model = None       # torch.nn.Module (read-only after load)
+_cached_rnafm_cache = None       # EmbeddingCache (read-only lookups)
+_cached_calibration = None       # dict with temperature, alpha, etc.
+_cached_disc_model = None        # XGBoost/LightGBM model object
+_model_cache_ready = False
+
+
+def _warm_model_cache():
+    """Load heavy model files into module-level globals (first run only)."""
+    global _cached_torch_model, _cached_rnafm_cache, _cached_calibration
+    global _cached_disc_model, _model_cache_ready
+
+    with _model_cache_lock:
+        if _model_cache_ready:
+            return
+        logger.info("Warming global model cache (first run)...")
+
+        # Load Compass-ML into a temporary scorer, then steal its internals
+        from compass.scoring.compass_ml_scorer import CompassMlScorer
+        tmp = CompassMlScorer(
+            weights_path=None,
+            rnafm_cache_dir=str(Path("compass/data/embeddings/rnafm")),
+            use_rlpa=True,
+            use_rnafm=True,
+            collect_embeddings=False,
+        )
+        _cached_torch_model = tmp.model        # nn.Module in eval mode
+        _cached_rnafm_cache = tmp._rnafm_cache  # EmbeddingCache
+        _cached_calibration = {
+            "temperature": tmp.temperature,
+            "alpha": tmp.alpha,
+            "calibrated": tmp.calibrated,
+            "_val_rho": tmp._val_rho,
+            "_calibration_meta": tmp._calibration_meta,
+        }
+        logger.info("Compass-ML model + RNA-FM cache loaded.")
+
+        # Load discrimination model
+        from compass.scoring.learned_discrimination import (
+            LearnedDiscriminationScorer,
+        )
+        tmp_disc = LearnedDiscriminationScorer()
+        _cached_disc_model = getattr(tmp_disc, "_model", None)
+        logger.info("Discrimination model loaded.")
+
+        _model_cache_ready = True
+
+
+def _inject_cached_models(pipeline) -> None:
+    """Inject pre-loaded model weights into a pipeline's scorers.
+
+    Each pipeline keeps its own scorer instances (with per-run mutable state)
+    but the heavy torch model, RNA-FM cache, and XGBoost model are shared.
+    """
+    if not _model_cache_ready:
+        return
+
+    ml = getattr(pipeline, "ml_scorer", None)
+    if ml is not None and _cached_torch_model is not None:
+        ml.model = _cached_torch_model
+        ml._rnafm_cache = _cached_rnafm_cache
+        if _cached_calibration:
+            ml.temperature = _cached_calibration["temperature"]
+            ml.alpha = _cached_calibration["alpha"]
+            ml.calibrated = _cached_calibration["calibrated"]
+            ml._val_rho = _cached_calibration["_val_rho"]
+            ml._calibration_meta = _cached_calibration["_calibration_meta"]
+
+    disc = getattr(pipeline, "disc_scorer", None)
+    if disc is not None and _cached_disc_model is not None:
+        disc._model = _cached_disc_model
+        disc._model_loaded = True
 
 
 class PipelineJob:
@@ -72,7 +155,7 @@ class AppState:
         self.results_dir.mkdir(parents=True, exist_ok=True)
         self._jobs: dict[str, PipelineJob] = {}
         self._lock = threading.Lock()
-        self._executor = ThreadPoolExecutor(max_workers=1)
+        self._executor = ThreadPoolExecutor(max_workers=2)
         self._rehydrate_from_disk()
 
     def submit_job(self, job: PipelineJob) -> str:
@@ -193,7 +276,16 @@ class AppState:
                 config_kwargs["scoring"] = ScoringConfig(**scoring_kwargs)
 
             config = PipelineConfig(**config_kwargs)
+
+            # Pre-warm model cache (blocks only the very first run)
+            _warm_model_cache()
+
             pipeline = COMPASSPipeline(config)
+
+            # Inject pre-loaded model weights into the pipeline's scorers.
+            # Each run still has its own scorer instances with independent
+            # mutable state, but shares the heavy model objects.
+            _inject_cached_models(pipeline)
 
             # Convert mutations
             self._update_progress(job, 0.05, "Target Resolution")

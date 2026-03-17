@@ -73,11 +73,11 @@ RUN mkdir -p results/api results/panels results/validation
 ENV MALLOC_TRIM_THRESHOLD_=0
 ENV PYTORCH_NO_CUDA_MEMORY_CACHING=1
 
-# PyTorch CPU threading — 4 threads optimal for Railway shared vCPUs
-# (8 threads causes contention on shared infrastructure)
-ENV OMP_NUM_THREADS=4
-ENV MKL_NUM_THREADS=4
-ENV TORCH_NUM_THREADS=4
+# PyTorch CPU threading — 2 threads per pipeline, 2 concurrent pipelines
+# Total: 4 active threads fits Railway 8 vCPU shared infra
+ENV OMP_NUM_THREADS=2
+ENV MKL_NUM_THREADS=2
+ENV TORCH_NUM_THREADS=2
 
 # Railway sets $PORT dynamically via env var
 ENV PORT=8000
