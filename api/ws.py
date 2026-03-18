@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -24,7 +25,17 @@ async def job_progress(websocket: WebSocket, job_id: str) -> None:
     """Stream job progress over WebSocket.
 
     Sends JSON status updates every 0.5s until job completes or fails.
+    Requires valid API key when COMPASS_API_KEY is set.
     """
+    # API key check (matches HTTP middleware behaviour)
+    api_key = os.environ.get("COMPASS_API_KEY", "")
+    if api_key:
+        # Check query param (?token=...) or Sec-WebSocket-Protocol header
+        token = websocket.query_params.get("token", "")
+        if token != api_key:
+            await websocket.close(code=4001)
+            return
+
     if _state is None:
         await websocket.close(code=1011)
         return

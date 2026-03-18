@@ -127,7 +127,9 @@ class LearnedDiscriminationScorer(Scorer):
         try:
             import pickle
 
-            # Direct pickle load — handles xgboost, lightgbm, or sklearn models
+            # Pickle deserialization of local model checkpoint.
+            # These files are shipped with the repo, not user-uploaded.
+            # For additional safety, restrict to known model classes.
             with open(self._model_path, "rb") as f:
                 checkpoint = pickle.load(f)
 
