@@ -3576,10 +3576,14 @@ const generateInterpretation = (r) => {
     }
   }
 
-  // Overall assessment
-  if (eff >= 0.7) lines.push(`Strong candidate (activity score ${eff.toFixed(3)}). High predicted Cas12a trans-cleavage rate, expected to produce a clear SWV signal decrease within 15-30 min on the electrochemical platform, well above the limit of detection.`);
-  else if (eff >= 0.5) lines.push(`Moderate candidate (activity score ${eff.toFixed(3)}). Predicted trans-cleavage is sufficient for detection but not optimal. The SWV signal decrease may require 30-45 min to reach a confident positive call on the electrochemical platform.`);
-  else lines.push(`Weak candidate (activity score ${eff.toFixed(3)}). Low predicted trans-cleavage rate. The electrochemical signal decrease may be near the detection limit, risking false negatives. Consider alternatives from the top-K list or synthetic mismatch optimisation.`);
+  // Overall assessment — factor in PAM-adjusted signal
+  const pamAdj = r.pamAdjusted ?? (r.pamPenalty != null ? eff * r.pamPenalty : eff);
+  const signalNote = (r.pamPenalty != null && r.pamPenalty < 0.8)
+    ? ` However, the PAM-adjusted signal is ${pamAdj.toFixed(3)} (${r.pamPenalty}\u00d7 penalty), ${pamAdj < 0.3 ? "below the 0.3 risk threshold. Longer incubation or higher RPA input may be needed for a resolvable SWV peak" : pamAdj < 0.4 ? "near the lower end of reliable detection" : "still within detectable range"}.`
+    : "";
+  if (eff >= 0.7) lines.push(`Strong candidate (activity score ${eff.toFixed(3)}).${signalNote || " High predicted Cas12a trans-cleavage rate, expected to produce a clear SWV signal decrease within 15-30 min on the electrochemical platform, well above the limit of detection."}`);
+  else if (eff >= 0.5) lines.push(`Moderate candidate (activity score ${eff.toFixed(3)}).${signalNote || " Predicted trans-cleavage is sufficient for detection but not optimal. The SWV signal decrease may require 30-45 min to reach a confident positive call on the electrochemical platform."}`);
+  else lines.push(`Weak candidate (activity score ${eff.toFixed(3)}).${signalNote || " Low predicted trans-cleavage rate. The electrochemical signal decrease may be near the detection limit, risking false negatives. Consider alternatives from the top-K list or synthetic mismatch optimisation."}`);
 
   // PAM quality
   const pam = (r.pam || "").toUpperCase();
@@ -3587,7 +3591,7 @@ const generateInterpretation = (r) => {
     lines.push(`Canonical PAM (${r.pam}). Optimal Cas12a recognition, no activity penalty applied.`);
   } else {
     const penaltyStr = r.pamPenalty != null ? ` Activity penalty: ${r.pamPenalty}\u00d7 (Kleinstiver et al. 2019).` : "";
-    lines.push(`Expanded PAM (${r.pam}${r.pamVariant ? `, ${r.pamVariant}` : ""}), recognized by enAsCas12a with reduced activity vs canonical TTTV.${penaltyStr} This is the best available PAM site in the GC-rich M. tuberculosis genomic context around this mutation.`);
+    lines.push(`Expanded PAM (${r.pam}${r.pamVariant ? `, ${r.pamVariant}` : ""}), recognized with reduced activity vs canonical TTTV.${penaltyStr} This is the best available PAM site in the GC-rich M. tuberculosis genomic context around this mutation.`);
   }
 
   // PAM disruption: binary discrimination override
