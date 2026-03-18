@@ -1107,7 +1107,7 @@ const HomePage = ({ goTo, connected }) => {
 
   const selectPanel = (p) => {
     setPanel(p);
-    if (p === "mdr14") { setSelected(new Set(ALL_INDICES)); setTargetsOpen(false); }
+    if (p === "mdr14" || p === "mdr14_rnasep") { setSelected(new Set(ALL_INDICES)); setTargetsOpen(false); }
     else if (p === "core5") { setSelected(new Set(CORE5_INDICES)); setTargetsOpen(false); }
     else { setTargetsOpen(true); }
   };
