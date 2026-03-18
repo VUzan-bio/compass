@@ -8,7 +8,7 @@ Live platform: [compass-crispr.com](https://compass-crispr.com/)
 
 ---
 
-COMPASS takes WHO-catalogued drug-resistance mutations as input and produces a complete, optimised diagnostic panel: crRNA sequences, RPA primer pairs, discrimination predictions, and clinical compliance metrics — ready for experimental validation on electrochemical or fluorescence platforms. The pipeline handles PAM deserts in the GC-rich *M. tuberculosis* genome (65.6% GC) through automatic proximity detection with allele-specific RPA primer design. Guide scoring uses Compass-ML — a dual-branch CNN + RNA-FM architecture with physics-informed R-loop attention — calibrated via Spearman-optimised ensemble weighting against both cis-cleavage (Kim et al. 2018) and trans-cleavage (Huang et al. 2024) benchmarks. Discrimination prediction blends a gradient-boosted model (XGBoost, 18 thermodynamic features, 6,136 paired MUT/WT measurements from Huang et al. 2024) with a physics-based R-loop propagation estimate (D_rloop). COMPASS produces a 14-channel MDR-TB panel (12 resistance mutations + IS6110 species control + RNaseP extraction control) covering rifampicin, isoniazid, ethambutol, pyrazinamide, fluoroquinolone, and aminoglycoside resistance, plus an IS6110 species identification control.
+COMPASS takes WHO-catalogued drug-resistance mutations as input and produces a complete, optimised diagnostic panel: crRNA sequences, RPA primer pairs, discrimination predictions, and clinical compliance metrics, ready for experimental validation on electrochemical or fluorescence platforms. The pipeline handles PAM deserts in the GC-rich *M. tuberculosis* genome (65.6% GC) through automatic proximity detection with allele-specific RPA primer design. Guide scoring uses Compass-ML: a dual-branch CNN + RNA-FM architecture with physics-informed R-loop attention — calibrated via Spearman-optimised ensemble weighting against both cis-cleavage (Kim et al. 2018) and trans-cleavage (Huang et al. 2024) benchmarks. Discrimination prediction blends a gradient-boosted model (XGBoost, 18 thermodynamic features, 6,136 paired MUT/WT measurements from Huang et al. 2024) with a physics-based R-loop propagation estimate (D_rloop). COMPASS produces a 14-channel MDR-TB panel (12 resistance mutations + IS6110 species control + RNaseP extraction control) covering rifampicin, isoniazid, ethambutol, pyrazinamide, fluoroquinolone, and aminoglycoside resistance, plus an IS6110 species identification control.
 
 ## Pipeline
 
@@ -294,7 +294,7 @@ python -m compass.scoring.calibrate
 
 ## Acknowledgements
 
-Developed for the SNSF BRIDGE Discovery grant (CHF 2.5M) on CRISPR-Cas12a electrochemical diagnostics for multidrug-resistant tuberculosis, in collaboration with the deMello Group (D-CHAB, ETH Zurich), CSEM, Swiss TPH, and NCTLD Georgia.
+Developed as an in silico design platform for multiplexed CRISPR-Cas12a gRNA panels targeting multidrug-resistant *M. tuberculosis*. Frontend, backend, and deployment built with [Claude Code](https://claude.ai/claude-code).
 
 
 ## License
