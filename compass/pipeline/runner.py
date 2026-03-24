@@ -839,6 +839,47 @@ class COMPASSPipeline:
             "breakdown": {"above_10x": n_above_10x, "above_3x": n_above_3x, "above_2x": n_above_2x},
         })
 
+        # --- Module 6.6: Post-discrimination strategy re-evaluation ---
+        # For SEED MISS targets (SNP outside seed, both direct + proximity candidates
+        # in pool), check if any direct candidate achieved sufficient discrimination
+        # despite the SNP being outside the seed. If so, prefer Direct over Proximity
+        # since crRNA-level discrimination is more robust than AS-RPA primer selectivity.
+        DISC_REROUTE_THRESHOLD = 3.0
+        n_rerouted = 0
+        for label, scored_list in scored_by_target.items():
+            has_direct = any(sc.candidate.detection_strategy == DetectionStrategy.DIRECT for sc in scored_list)
+            has_proximity = any(sc.candidate.detection_strategy != DetectionStrategy.DIRECT for sc in scored_list)
+            if not (has_direct and has_proximity):
+                continue  # Only re-evaluate targets with both strategies in pool
+
+            # Check if any direct candidate meets discrimination threshold
+            best_direct_disc = 0.0
+            for sc in scored_list:
+                if sc.candidate.detection_strategy != DetectionStrategy.DIRECT:
+                    continue
+                if sc.discrimination and sc.discrimination.wt_activity > 0:
+                    ratio = sc.discrimination.mut_activity / sc.discrimination.wt_activity
+                    best_direct_disc = max(best_direct_disc, ratio)
+
+            if best_direct_disc >= DISC_REROUTE_THRESHOLD:
+                # Direct candidates discriminate well enough — remove proximity fallbacks
+                before = len(scored_list)
+                scored_by_target[label] = [
+                    sc for sc in scored_list
+                    if sc.candidate.detection_strategy == DetectionStrategy.DIRECT
+                ]
+                n_removed = before - len(scored_by_target[label])
+                if n_removed > 0:
+                    n_rerouted += 1
+                    logger.info(
+                        "  %s: Direct candidate achieves %.1f× discrimination (outside seed) "
+                        "— dropping %d Proximity fallbacks",
+                        label, best_direct_disc, n_removed,
+                    )
+
+        if n_rerouted > 0:
+            logger.info("Strategy re-evaluation: %d targets promoted to Direct based on discrimination scores", n_rerouted)
+
         # --- Module 7: Multiplex optimization ---
         t0 = time.perf_counter_ns()
         logger.info("Module 7: Multiplex panel optimization...")
