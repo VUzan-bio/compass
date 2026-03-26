@@ -1,0 +1,66 @@
+{
+  "organism_id": "saureus",
+  "name": "Staphylococcus aureus",
+  "reference_accession": "NC_007795.1",
+  "reference_name": "NCTC 8325",
+  "genome_length": 2821361,
+  "genome_gc": 0.328,
+
+  "gene_synonyms": {
+    "mecA":     ["SAOUHSC_00003"],
+    "mecC":     [],
+    "blaZ":     [],
+    "vanA":     [],
+    "vanB":     [],
+    "gyrA":     ["SAOUHSC_00006"],
+    "gyrB":     ["SAOUHSC_00005"],
+    "grlA":     ["parC", "SAOUHSC_01525"],
+    "grlB":     ["parE", "SAOUHSC_01524"],
+    "rpoB":     ["SAOUHSC_00573"],
+    "fusA":     ["SAOUHSC_00574"],
+    "fusB":     [],
+    "dfrB":     ["SAOUHSC_01228"],
+    "murA":     ["SAOUHSC_00949"],
+    "ileS":     ["SAOUHSC_01081"],
+    "rplC":     ["SAOUHSC_02665"],
+    "cfr":      [],
+    "ermA":     [],
+    "ermB":     [],
+    "ermC":     [],
+    "msrA":     [],
+    "mprF":     ["SAOUHSC_01636"],
+    "dltA":     ["SAOUHSC_00870"],
+    "23S rRNA": ["rrl"],
+    "16S rRNA": ["rrs"],
+    "nuc":      ["SAOUHSC_00710"]
+  },
+
+  "codon_offsets": {
+    "gyrA": [0],
+    "grlA": [0],
+    "rpoB": [0]
+  },
+
+  "species_control": {
+    "name": "nuc",
+    "description": "Thermonuclease gene — gold-standard species-specific marker for S. aureus (Brakstad et al. 1992). Single copy, highly conserved across all S. aureus lineages including MRSA.",
+    "reference": "Brakstad et al., J Clin Microbiol 1992; Kearns et al., J Hosp Infect 1999",
+    "spacer": "GCGATTGATGGTGATACGGT",
+    "pam": "TTTG",
+    "genomic_start": 746710,
+    "genomic_mid": 747080,
+    "fwd_primer": null,
+    "rev_primer": null,
+    "amplicon_length": null,
+    "channel_name": "nuc_SAUREUS_ID"
+  },
+
+  "heuristic_weights": {
+    "seed_position": 0.35,
+    "gc": 0.20,
+    "structure": 0.15,
+    "homopolymer": 0.15,
+    "offtarget": 0.15
+  },
+  "gc_optimal": 0.35
+}

@@ -1,0 +1,15 @@
+gene	mutation	drug	confidence	category	notes
+blaCTX-M-15	gene_presence	CTX	1 - assoc w resistance	gene_presence	Most prevalent ESBL globally; hydrolyzes cefotaxime, ceftriaxone
+blaCTX-M-14	gene_presence	CTX	1 - assoc w resistance	gene_presence	Second most common CTX-M variant worldwide
+blaCTX-M-27	gene_presence	CTX	1 - assoc w resistance	gene_presence	Emerging CTX-M variant in E. coli ST131 C2 clade
+blaNDM-1	gene_presence	CAR	1 - assoc w resistance	gene_presence	Metallo-beta-lactamase; carbapenem resistance; WHO critical priority. Enterobacterales-wide (plasmid-borne); validated in E. coli reference.
+blaNDM-5	gene_presence	CAR	1 - assoc w resistance	gene_presence	NDM variant with enhanced activity; emerging in community E. coli. Enterobacterales-wide (plasmid-borne).
+blaKPC-2	gene_presence	CAR	1 - assoc w resistance	gene_presence	Serine carbapenemase; meropenem/imipenem resistance. Enterobacterales-wide; dominant in K. pneumoniae, transferable to E. coli/Enterobacter.
+blaKPC-3	gene_presence	CAR	1 - assoc w resistance	gene_presence	KPC variant; Enterobacterales-wide. crRNA designed against conserved KPC core; detects in any host species.
+blaOXA-48	gene_presence	CAR	1 - assoc w resistance	gene_presence	Carbapenemase with weak carbapenem hydrolysis; hard to detect phenotypically. Enterobacterales-wide (plasmid-borne).
+mcr-1	gene_presence	CST	1 - assoc w resistance	gene_presence	Plasmid-mediated colistin resistance; last-resort drug
+gyrA	S83L	CIP	1 - assoc w resistance	aa_substitution	Primary FQ resistance mutation; Ser83→Leu in QRDR
+gyrA	D87N	CIP	1 - assoc w resistance	aa_substitution	Second-step FQ resistance mutation; with S83L = high-level resistance
+parC	S80I	CIP	2 - assoc w resistance	aa_substitution	Topoisomerase IV mutation; contributes to high-level FQ resistance
+parC	E84V	CIP	2 - assoc w resistance	aa_substitution	parC QRDR mutation; auxiliary FQ resistance determinant
+ampC	P-42L	AMP	1 - assoc w resistance	promoter	Promoter mutation increasing AmpC expression; cephalosporin resistance

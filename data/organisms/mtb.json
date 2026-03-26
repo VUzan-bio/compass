@@ -1,0 +1,70 @@
+{
+  "organism_id": "mtb",
+  "name": "Mycobacterium tuberculosis",
+  "reference_accession": "NC_000962.3",
+  "reference_name": "H37Rv",
+  "genome_length": 4411532,
+  "genome_gc": 0.656,
+
+  "gene_synonyms": {
+    "rpoB":   ["Rv0667"],
+    "katG":   ["Rv1908c"],
+    "inhA":   ["Rv1484"],
+    "fabG1":  ["Rv1483", "mabA"],
+    "embB":   ["Rv3795"],
+    "embC":   ["Rv3793"],
+    "embA":   ["Rv3794"],
+    "pncA":   ["Rv2043c"],
+    "gyrA":   ["Rv0006"],
+    "gyrB":   ["Rv0005"],
+    "rrs":    ["MTB000019", "Rvnr01"],
+    "rrl":    ["MTB000020", "Rvnr02"],
+    "eis":    ["Rv2416c"],
+    "tlyA":   ["Rv1694"],
+    "rpsL":   ["Rv0682"],
+    "Rv0678": ["mmpR5"],
+    "mmpR5":  ["Rv0678"],
+    "rplC":   ["Rv0701"],
+    "ddn":    ["Rv3547"],
+    "fbiA":   ["Rv3261"],
+    "fbiB":   ["Rv3262"],
+    "fbiC":   ["Rv1173"],
+    "fgd1":   ["Rv0407"],
+    "ethA":   ["Rv3854c"],
+    "folC":   ["Rv2447c"],
+    "thyA":   ["Rv2764c"],
+    "pepQ":   ["Rv2535c"],
+    "ahpC":   ["Rv2428"],
+    "rpoC":   ["Rv0668"]
+  },
+
+  "codon_offsets": {
+    "rpoB": [0, 81],
+    "katG": [0],
+    "pncA": [0],
+    "gyrA": [0, 3]
+  },
+
+  "species_control": {
+    "name": "IS6110",
+    "description": "Multi-copy insertion element specific to M. tuberculosis complex (6-16 copies/genome)",
+    "reference": "Ai et al., Emerging Microbes & Infections 2019",
+    "spacer": "AATGTCGCCGCGATCGAGCG",
+    "pam": "TTTG",
+    "genomic_start": 889021,
+    "genomic_mid": 889698,
+    "fwd_primer": "GATCGTCTCGATCTGCGTAAAGGTGGACTACCAGGGTATCTGCGT",
+    "rev_primer": "CCGCTTCCAGCCCAGTGACGAGCGTAAGCCTCAACTACCACAGT",
+    "amplicon_length": 143,
+    "channel_name": "IS6110_MTB_ID"
+  },
+
+  "heuristic_weights": {
+    "seed_position": 0.30,
+    "gc": 0.25,
+    "structure": 0.22,
+    "homopolymer": 0.08,
+    "offtarget": 0.15
+  },
+  "gc_optimal": 0.65
+}

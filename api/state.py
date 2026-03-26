@@ -263,13 +263,33 @@ class AppState:
             output_dir = self.results_dir / job_id
             output_dir.mkdir(parents=True, exist_ok=True)
 
+            # Resolve organism from config_overrides (default: mtb)
+            organism_id = job.config_overrides.get("organism", "mtb")
+
+            # Per-organism reference file resolution via env vars with sensible defaults
+            _REF_DEFAULTS = {
+                "mtb": ("data/references/H37Rv.fasta", "data/references/H37Rv", "data/references/H37Rv.gff3"),
+                "ecoli": ("data/references/ecoli_K12.fasta", "data/references/ecoli_K12", "data/references/ecoli_K12.gff3"),
+                "saureus": ("data/references/saureus_NCTC8325.fasta", "data/references/saureus_NCTC8325", "data/references/saureus_NCTC8325.gff3"),
+                "ngonorrhoeae": ("data/references/ngono_FA1090.fasta", "data/references/ngono_FA1090", "data/references/ngono_FA1090.gff3"),
+            }
+            fasta_default, idx_default, gff_default = _REF_DEFAULTS.get(organism_id, _REF_DEFAULTS["mtb"])
+
+            # MTB uses dedicated env vars for backwards compat; others use organism-prefixed env vars
+            if organism_id == "mtb":
+                fasta_path = os.environ.get("H37RV_FASTA_PATH", fasta_default)
+                index_path = os.environ.get("BOWTIE2_INDEX_PATH", idx_default)
+                gff_path = os.environ.get("H37RV_GFF_PATH", gff_default)
+            else:
+                prefix = organism_id.upper()
+                fasta_path = os.environ.get(f"{prefix}_FASTA_PATH", fasta_default)
+                index_path = os.environ.get(f"{prefix}_INDEX_PATH", idx_default)
+                gff_path = os.environ.get(f"{prefix}_GFF_PATH", gff_default)
+
             ref_config = ReferenceConfig(
-                genome_fasta=Path(os.environ.get(
-                    "H37RV_FASTA_PATH", "data/references/H37Rv.fasta")),
-                genome_index=Path(os.environ.get(
-                    "BOWTIE2_INDEX_PATH", "data/references/H37Rv")),
-                gff_annotation=Path(os.environ.get(
-                    "H37RV_GFF_PATH", "data/references/H37Rv.gff3")),
+                genome_fasta=Path(fasta_path),
+                genome_index=Path(index_path),
+                gff_annotation=Path(gff_path),
             )
 
             # Apply whitelisted overrides only
@@ -284,6 +304,7 @@ class AppState:
             config_kwargs: dict[str, Any] = {
                 "name": job.name,
                 "output_dir": output_dir,
+                "organism": organism_id,
                 "reference": ref_config,
             }
             scoring_kwargs: dict[str, Any] = {}

@@ -1,0 +1,20 @@
+gene	mutation	drug	confidence	category	notes
+# penA numbering: Ambler PBP2 convention (Unemo et al. 2019; WHO gonococcal AMR 2023)
+# penA mosaic: resistance is COMBINATORIAL — individual SNPs modest effect; high-level CRO-R requires >=3 mutations
+# Panel interpretation: flag "mosaic penA" when >=2 electrodes in this group fire
+penA	A501V	CRO	1 - assoc w resistance	aa_substitution	Mosaic penA; reduced CRO susceptibility. COMBINATORIAL — requires co-occurrence with other mosaic mutations for high-level ESC-R. Ambler numbering.
+penA	A501T	CRO	1 - assoc w resistance	aa_substitution	Alternative mosaic mutation at 501. COMBINATORIAL. Ambler numbering.
+penA	G545S	CRO	1 - assoc w resistance	aa_substitution	Mosaic penA; ESC-R in combination. COMBINATORIAL. Key marker in FC428/H041 superbug lineages.
+penA	I312M	CRO	2 - assoc w resistance	aa_substitution	Mosaic penA; intermediate CRO. COMBINATORIAL. Modest individual effect.
+penA	V316T	CRO	2 - assoc w resistance	aa_substitution	Mosaic penA; cephalosporin-R in combination. COMBINATORIAL.
+penA	T483S	CRO	2 - assoc w resistance	aa_substitution	Mosaic penA; ESC-R contribution. COMBINATORIAL.
+gyrA	S91F	CIP	1 - assoc w resistance	aa_substitution	Primary ciprofloxacin resistance; QRDR hot spot
+gyrA	D95A	CIP	1 - assoc w resistance	aa_substitution	Second-step FQ resistance; with S91F = high-level resistance
+gyrA	D95G	CIP	1 - assoc w resistance	aa_substitution	Alternative D95 substitution
+parC	D86N	CIP	2 - assoc w resistance	aa_substitution	Auxiliary FQ resistance; topoisomerase IV
+parC	S87R	CIP	2 - assoc w resistance	aa_substitution	parC QRDR mutation; FQ resistance contribution
+23S rRNA	C2611T	AZM	1 - assoc w resistance	rrna	High-level azithromycin resistance; single point mutation in 23S rRNA
+23S rRNA	A2059G	AZM	1 - assoc w resistance	rrna	Azithromycin resistance; macrolide target site
+mtrR	A-35del	AZM	1 - assoc w resistance	promoter	Promoter deletion increasing MtrCDE efflux pump expression
+tetM	gene_presence	TET	1 - assoc w resistance	gene_presence	Ribosomal protection protein; tetracycline resistance (conjugative)
+folP	R228S	SXT	1 - assoc w resistance	aa_substitution	Sulfonamide resistance; DHPS active site insertion/mutation

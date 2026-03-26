@@ -7,19 +7,23 @@ import { T, FONT, HEADING, MONO } from "../tokens";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { Badge, Btn } from "../components/ui/index.jsx";
 import { listPanels, createPanel, listJobs } from "../api";
-import { MUTATIONS } from "../mockData";
+import { MUTATIONS, ORGANISMS } from "../mockData";
+
+const mutLabel = (m) => m.category === "gene_presence" ? m.gene : `${m.gene}_${m.ref}${m.pos}${m.alt}`;
 
 const DEFAULT_PANELS = [
   {
     id: "mdr14",
-    name: "MDR-TB 14-plex",
-    description: "Complete WHO-catalogued first- and second-line resistance panel. Covers 6 drug classes with 14 target mutations for comprehensive drug-susceptibility profiling.",
-    mutations: MUTATIONS.map(m => `${m.gene}_${m.ref}${m.pos}${m.alt}`),
+    name: "MDR-TB 12-plex",
+    organism: "mtb",
+    description: "WHO-catalogued first- and second-line resistance panel. Covers 6 drug classes for comprehensive drug-susceptibility profiling.",
+    mutations: MUTATIONS.map(mutLabel),
     created_at: "2025-01-15T00:00:00Z",
   },
   {
     id: "core5",
-    name: "Core 5-plex",
+    name: "Core 5-plex (MTB)",
+    organism: "mtb",
     description: "High-confidence tier-1 mutations only. Targets the most clinically actionable resistance determinants for rapid point-of-care screening.",
     mutations: ["rpoB_S531L", "katG_S315T", "fabG1_C-15T", "gyrA_D94G", "rrs_A1401G"],
     created_at: "2025-01-15T00:00:00Z",
@@ -27,8 +31,33 @@ const DEFAULT_PANELS = [
   {
     id: "rif",
     name: "Rifampicin Panel",
+    organism: "mtb",
     description: "Focused panel for rifampicin mono-resistance detection. Covers the rpoB RRDR hotspot mutations conferring >95% of phenotypic RIF resistance.",
     mutations: ["rpoB_S531L", "rpoB_H526Y", "rpoB_D516V"],
+    created_at: "2025-01-15T00:00:00Z",
+  },
+  {
+    id: "ecoli_esbl",
+    name: "E. coli ESBL/CRE Panel",
+    organism: "ecoli",
+    description: "ESBL + Enterobacterales carbapenemase detection. CTX-M, NDM, KPC, OXA-48, mcr-1, fluoroquinolone QRDR.",
+    mutations: (ORGANISMS.find(o => o.id === "ecoli")?.mutations || []).map(mutLabel),
+    created_at: "2025-01-15T00:00:00Z",
+  },
+  {
+    id: "mrsa",
+    name: "MRSA/VRSA Panel",
+    organism: "saureus",
+    description: "Methicillin and vancomycin resistance detection. mecA/C, vanA, fluoroquinolone, rifampicin, macrolide targets.",
+    mutations: (ORGANISMS.find(o => o.id === "saureus")?.mutations || []).map(mutLabel),
+    created_at: "2025-01-15T00:00:00Z",
+  },
+  {
+    id: "ngono_amr",
+    name: "N. gonorrhoeae AMR Panel",
+    organism: "ngonorrhoeae",
+    description: "ESC resistance (penA mosaic), azithromycin (23S rRNA + mtrR efflux), fluoroquinolone, tetracycline.",
+    mutations: (ORGANISMS.find(o => o.id === "ngonorrhoeae")?.mutations || []).map(mutLabel),
     created_at: "2025-01-15T00:00:00Z",
   },
 ];

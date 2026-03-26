@@ -91,12 +91,16 @@ def cmd_info(args: argparse.Namespace) -> None:
             "7. Multiplex optimization (simulated annealing)",
             "8. RPA primer design (standard + allele-specific AS-RPA)",
             "8.5 Co-selection validation (crRNA-primer compatibility)",
-            "9. Panel assembly (+ IS6110 MTB species ID control)",
+            "9. Panel assembly (+ organism-specific species ID control)",
             "10. Export (JSON, TSV, structured reports)",
         ],
         "cas12a_variants": ["AsCas12a", "enAsCas12a", "LbCas12a", "FnCas12a", "Cas12a_ultra"],
         "scoring_backends": ["heuristic", "seq_cnn", "jepa_efficiency", "jepa_discrimination"],
-        "organisms_tested": ["M. tuberculosis (H37Rv)"],
+        "organisms_supported": [
+            "M. tuberculosis (H37Rv)", "E. coli (K-12)", "S. aureus (NCTC 8325)",
+            "N. gonorrhoeae (FA 1090)", "P. aeruginosa", "K. pneumoniae",
+            "A. baumannii", "S. enterica", "E. faecium",
+        ],
     }
     print(json.dumps(info, indent=2))
 

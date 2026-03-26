@@ -1,0 +1,66 @@
+{
+  "organism_id": "ecoli",
+  "name": "Escherichia coli",
+  "reference_accession": "NC_000913.3",
+  "reference_name": "K-12 MG1655",
+  "genome_length": 4641652,
+  "genome_gc": 0.508,
+
+  "gene_synonyms": {
+    "blaCTX-M-15": ["b_ctx_m_15"],
+    "blaCTX-M-14": ["b_ctx_m_14"],
+    "blaCTX-M-27": ["b_ctx_m_27"],
+    "blaNDM-1":    ["b_ndm_1"],
+    "blaNDM-5":    ["b_ndm_5"],
+    "blaKPC-2":    ["b_kpc_2"],
+    "blaKPC-3":    ["b_kpc_3"],
+    "blaOXA-48":   ["b_oxa_48"],
+    "blaTEM-1":    ["b_tem_1"],
+    "blaSHV-1":    ["b_shv_1"],
+    "mcr-1":       ["b2350_mcr1"],
+    "mcr-3":       [],
+    "mcr-5":       [],
+    "gyrA":        ["b2231"],
+    "gyrB":        ["b3699"],
+    "parC":        ["b3019"],
+    "parE":        ["b3020"],
+    "ampC":        ["b4150"],
+    "ompF":        ["b0929"],
+    "ompC":        ["b2215"],
+    "acrR":        ["b0464"],
+    "acrB":        ["b0462"],
+    "folA":        ["b0048"],
+    "folP":        ["b3177"],
+    "16S rRNA":    ["rrsA", "rrsB", "rrsC", "rrsD", "rrsE", "rrsG", "rrsH"],
+    "23S rRNA":    ["rrlA", "rrlB", "rrlC", "rrlD", "rrlE", "rrlG", "rrlH"]
+  },
+
+  "codon_offsets": {
+    "gyrA": [0],
+    "parC": [0],
+    "ampC": [0]
+  },
+
+  "species_control": {
+    "name": "uidA",
+    "description": "Beta-glucuronidase gene — highly conserved single-copy marker specific to E. coli (not present in other Enterobacteriaceae at >95% identity)",
+    "reference": "Feng & Hartman, Mol Cell Probes 1982; Bej et al., Appl Environ Microbiol 1991",
+    "spacer": "GCGTCTGTTGACTGGCAGGT",
+    "pam": "TTTG",
+    "genomic_start": 1617382,
+    "genomic_mid": 1617882,
+    "fwd_primer": null,
+    "rev_primer": null,
+    "amplicon_length": null,
+    "channel_name": "uidA_ECOLI_ID"
+  },
+
+  "heuristic_weights": {
+    "seed_position": 0.35,
+    "gc": 0.20,
+    "structure": 0.20,
+    "homopolymer": 0.10,
+    "offtarget": 0.15
+  },
+  "gc_optimal": 0.50
+}

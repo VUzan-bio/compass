@@ -62,6 +62,7 @@ class HeuristicScorer(Scorer):
         self,
         weights: dict[str, float] | None = None,
         organism: str = "default",
+        gc_optimal_override: float | None = None,
     ) -> None:
         if weights is not None:
             self.weights = weights
@@ -69,7 +70,12 @@ class HeuristicScorer(Scorer):
             self.weights = HEURISTIC_WEIGHTS_MTB
         else:
             self.weights = HEURISTIC_WEIGHTS
-        self.gc_optimal = GC_OPTIMAL_MTB if organism == "mtb" else GC_OPTIMAL_DEFAULT
+        if gc_optimal_override is not None:
+            self.gc_optimal = gc_optimal_override
+        elif organism == "mtb":
+            self.gc_optimal = GC_OPTIMAL_MTB
+        else:
+            self.gc_optimal = GC_OPTIMAL_DEFAULT
 
     def score(
         self,

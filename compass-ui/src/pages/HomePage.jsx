@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { T, FONT, HEADING, MONO } from "../tokens";
 import { useIsMobile } from "../hooks/useIsMobile";
-import { MUTATIONS, MODULES, MODULE_NAME_MAP, PROGRESS_TO_STEP, resolveStep } from "../mockData";
+import { MUTATIONS, MODULES, MODULE_NAME_MAP, PROGRESS_TO_STEP, resolveStep, ORGANISMS } from "../mockData";
 import { Badge, DrugBadge, Btn } from "../components/ui/index.jsx";
 import { submitRun, getJob, getResults, connectJobWS } from "../api";
 
@@ -21,16 +21,22 @@ const DEFAULT_MUTS = [
 
 const HomePage = ({ goTo, connected }) => {
   const mobile = useIsMobile();
+  const [organism, setOrganism] = useState("mtb");
   const [runName, setRunName] = useState("COMPASS_panel_" + new Date().toISOString().slice(0, 10).replace(/-/g, ""));
   const [mode, setMode] = useState("standard");
   const [selectedModules, setSelectedModules] = useState(new Set(MODULES.map(m => m.id)));
   const [configOpen, setConfigOpen] = useState(false);
+  const [organismSectionOpen, setOrganismSectionOpen] = useState(true);
   const [panelSectionOpen, setPanelSectionOpen] = useState(true);
   const [scorerSectionOpen, setScorerSectionOpen] = useState(true);
   const [scorer, setScorer] = useState(null); // "heuristic" | "compass_ml" | null
   const [enzymeId, setEnzymeId] = useState("enAsCas12a"); // "AsCas12a" | "enAsCas12a"
   const [launching, setLaunching] = useState(false);
   const [error, setError] = useState(null);
+
+  // Active organism's mutation list
+  const activeOrganism = ORGANISMS.find(o => o.id === organism) || ORGANISMS[0];
+  const orgMutations = activeOrganism.mutations;
 
   /* ── Inline pipeline execution state ── */
   const [pipeJobId, setPipeJobId] = useState(null);
@@ -53,36 +59,44 @@ const HomePage = ({ goTo, connected }) => {
   useEffect(() => { pipeStepStartRef.current = Date.now(); }, [pipeStep]);
 
   /* ── Preset panel definitions ── */
-  const ALL_INDICES = MUTATIONS.map((_, i) => i);
-  const CORE5_LABELS = ["rpoB_S531L", "katG_S315T", "fabG1_C-15T", "gyrA_D94G", "rrs_A1401G"];
-  const CORE5_INDICES = MUTATIONS.map((m, i) => CORE5_LABELS.includes(`${m.gene}_${m.ref}${m.pos}${m.alt}`) ? i : -1).filter(i => i >= 0);
+  const ALL_INDICES = orgMutations.map((_, i) => i);
+  const CORE5_LABELS = organism === "mtb"
+    ? ["rpoB_S531L", "katG_S315T", "fabG1_C-15T", "gyrA_D94G", "rrs_A1401G"]
+    : orgMutations.filter(m => m.tier === 1).slice(0, 5).map(m => m.category === "gene_presence" ? m.gene : `${m.gene}_${m.ref}${m.pos}${m.alt}`);
+  const mutLabel = (m) => m.category === "gene_presence" ? m.gene : `${m.gene}_${m.ref}${m.pos}${m.alt}`;
+  const CORE5_INDICES = orgMutations.map((m, i) => CORE5_LABELS.includes(mutLabel(m)) ? i : -1).filter(i => i >= 0);
 
   const [panel, setPanel] = useState(null);        // "mdr14" | "mdr14_rnasep" | "core5" | "custom" | null
   const [selected, setSelected] = useState(new Set());
   const [targetsOpen, setTargetsOpen] = useState(false);
 
+  const selectOrganism = (id) => {
+    setOrganism(id);
+    setPanel(null);
+    setSelected(new Set());
+  };
+
   const selectPanel = (p) => {
     setPanel(p);
-    if (p === "mdr14" || p === "mdr14_rnasep") { setSelected(new Set(ALL_INDICES)); setTargetsOpen(false); }
+    if (p === "mdr14" || p === "mdr14_rnasep" || p === "full") { setSelected(new Set(ALL_INDICES)); setTargetsOpen(false); }
     else if (p === "core5") { setSelected(new Set(CORE5_INDICES)); setTargetsOpen(false); }
     else { setTargetsOpen(true); }
   };
 
   const toggleMut = (i) => { const n = new Set(selected); n.has(i) ? n.delete(i) : n.add(i); setSelected(n); };
-  const selectedDrugs = [...new Set([...selected].map(i => MUTATIONS[i]?.drug).filter(Boolean))];
+  const selectedDrugs = [...new Set([...selected].map(i => orgMutations[i]?.drug).filter(Boolean))];
 
   const launch = async () => {
     setLaunching(true);
     setError(null);
-    const muts = [...selected].map(i => ({
-      gene: MUTATIONS[i].gene,
-      ref_aa: MUTATIONS[i].ref,
-      position: MUTATIONS[i].pos,
-      alt_aa: MUTATIONS[i].alt,
-      drug: MUTATIONS[i].drug || "OTHER",
-    }));
+    const muts = [...selected].map(i => {
+      const m = orgMutations[i];
+      return m.category === "gene_presence"
+        ? { gene: m.gene, mutation: "gene_presence", drug: m.drug || "OTHER" }
+        : { gene: m.gene, ref_aa: m.ref, position: m.pos, alt_aa: m.alt, drug: m.drug || "OTHER" };
+    });
     const apiMode = "full";
-    const overrides = scorer !== "heuristic" ? { scorer } : {};
+    const overrides = { ...(scorer !== "heuristic" ? { scorer } : {}), organism };
     if (connected) {
       const { data, error: err } = await submitRun(runName, apiMode, muts, overrides, enzymeId);
       if (err) { setError(err); setLaunching(false); return; }
@@ -241,7 +255,7 @@ const HomePage = ({ goTo, connected }) => {
             <div style={{ display: "flex", gap: "12px", alignItems: "center", fontSize: "13px" }}>
               <span style={{ fontWeight: 600, color: T.text }}>Pipeline Configuration</span>
               <span style={{ color: T.textSec, fontSize: "11px" }}>
-                {panel === "mdr14" ? "MDR-TB 14-plex" : panel === "mdr14_rnasep" ? "MDR-TB 14-plex + RNaseP" : panel === "core5" ? "Core 5-plex" : "Custom"} · {scorer === "compass_ml" ? "Compass-ML" : scorer === "heuristic" ? "Heuristic" : ""} · {selected.size} targets
+                {activeOrganism.name} · {panel === "mdr14" ? "MDR-TB 14-plex" : panel === "mdr14_rnasep" ? "MDR-TB + RNaseP" : panel === "full" ? "Full panel" : panel === "core5" ? "Core 5-plex" : "Custom"} · {scorer === "compass_ml" ? "Compass-ML" : scorer === "heuristic" ? "Heuristic" : ""} · {selected.size} targets
               </span>
             </div>
             <ChevronDown size={14} color={T.textSec} style={{ transform: "rotate(0deg)", transition: "0.2s" }} />
@@ -275,6 +289,46 @@ const HomePage = ({ goTo, connected }) => {
 
         <div style={{ height: 1, background: T.borderLight, margin: "0 0 24px" }} />
 
+        {/* Organism Selector */}
+        <div style={{ marginBottom: "16px" }}>
+          <div style={{ background: T.bgSub, border: `1px solid ${T.borderLight}`, borderRadius: "4px", overflow: "hidden" }}>
+          <button onClick={() => setOrganismSectionOpen(!organismSectionOpen)} style={{
+            width: "100%", display: "flex", alignItems: "center", gap: "10px", padding: "14px 16px",
+            background: "none", border: "none", cursor: "pointer", fontFamily: FONT,
+          }}>
+            <Database size={14} color={T.textSec} />
+            <span style={{ fontSize: "13px", fontWeight: 600, color: T.text, flex: 1, textAlign: "left" }}>Target Organism</span>
+            <span style={{ fontSize: "11px", color: T.primary, fontWeight: 600, marginRight: "4px" }}>{activeOrganism.name}</span>
+            <ChevronDown size={14} color={T.textSec} style={{ transform: organismSectionOpen ? "rotate(180deg)" : "none", transition: "0.2s" }} />
+          </button>
+          {organismSectionOpen && (
+            <div style={{ padding: "16px 20px", borderTop: `1px solid ${T.borderLight}` }}>
+              <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr", gap: "10px" }}>
+                {ORGANISMS.map(org => (
+                  <div key={org.id} onClick={() => selectOrganism(org.id)} style={{
+                    padding: "14px 18px", borderRadius: "4px", cursor: "pointer",
+                    border: organism === org.id ? `2px solid ${T.primary}` : `1px solid ${T.border}`,
+                    background: organism === org.id ? T.primaryLight : T.bg,
+                    display: "flex", flexDirection: "column", transition: "border-color 0.12s, background 0.12s",
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                      <span style={{ fontSize: "14px", fontWeight: 600, color: T.text, fontFamily: HEADING, fontStyle: "italic" }}>{org.name}</span>
+                      <span style={{ fontSize: "11px", fontWeight: 500, fontFamily: MONO, color: organism === org.id ? T.primary : T.textTer }}>{org.mutations.length} targets</span>
+                    </div>
+                    <div style={{ fontSize: "12px", color: T.textSec, lineHeight: 1.5, marginBottom: "6px" }}>{org.description}</div>
+                    <div style={{ display: "flex", gap: "12px", fontSize: "11px", color: T.textTer, borderTop: `1px solid ${organism === org.id ? T.primary + "30" : T.borderLight}`, paddingTop: "6px" }}>
+                      <span>{org.reference}</span>
+                      <span>GC {(org.gc * 100).toFixed(1)}%</span>
+                      <span>{org.priority}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          </div>
+        </div>
+
         {/* Diagnostic Panel */}
         <div style={{ marginBottom: "16px" }}>
           <div style={{ background: T.bgSub, border: `1px solid ${T.borderLight}`, borderRadius: "4px", overflow: "hidden" }}>
@@ -284,23 +338,29 @@ const HomePage = ({ goTo, connected }) => {
           }}>
             <Layers size={14} color={T.textSec} />
             <span style={{ fontSize: "13px", fontWeight: 600, color: T.text, flex: 1, textAlign: "left" }}>Diagnostic Panel</span>
-            <span style={{ fontSize: "11px", color: T.textTer, marginRight: "4px" }}>{panel ? (panel === "mdr14" ? "MDR-TB 14-plex" : panel === "mdr14_rnasep" ? "MDR-TB + RNaseP" : panel === "core5" ? "Core 5-plex" : "Custom") : "select panel"}</span>
+            <span style={{ fontSize: "11px", color: T.textTer, marginRight: "4px" }}>{panel ? (panel === "mdr14" ? "MDR-TB 14-plex" : panel === "mdr14_rnasep" ? "MDR-TB + RNaseP" : panel === "full" ? `Full ${activeOrganism.name} panel` : panel === "core5" ? "Core 5-plex" : "Custom") : "select panel"}</span>
             <ChevronDown size={14} color={T.textSec} style={{ transform: panelSectionOpen ? "rotate(180deg)" : "none", transition: "0.2s" }} />
           </button>
           {panelSectionOpen && (
             <div style={{ padding: "16px 20px", borderTop: `1px solid ${T.borderLight}` }}>
-              {/* Preset cards; 2×2 */}
+              {/* Preset cards; organism-aware */}
               <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr", gap: "10px" }}>
                 {[
-                  { id: "mdr14", name: "MDR-TB 14-plex", targets: ALL_INDICES.length + " targets",
-                    desc: "Full WHO-catalogued first- and second-line resistance panel.",
-                    meta: ["6 drug classes", "Tier 1–2", "High + Moderate"] },
-                  { id: "mdr14_rnasep", name: "MDR-TB 14-plex + RNaseP", targets: (ALL_INDICES.length + 1) + " targets",
-                    desc: "Full MDR panel plus human RNaseP (RPPH1) extraction control.",
-                    meta: ["6 drug classes", "+ extraction ctrl", "CDC standard"] },
-                  { id: "core5", name: "Core 5-plex", targets: "5 targets",
+                  ...(organism === "mtb" ? [
+                    { id: "mdr14", name: "MDR-TB 14-plex", targets: ALL_INDICES.length + " targets",
+                      desc: "Full WHO-catalogued first- and second-line resistance panel.",
+                      meta: ["6 drug classes", "Tier 1\u20132", "High + Moderate"] },
+                    { id: "mdr14_rnasep", name: "MDR-TB 14-plex + RNaseP", targets: (ALL_INDICES.length + 1) + " targets",
+                      desc: "Full MDR panel plus human RNaseP (RPPH1) extraction control.",
+                      meta: ["6 drug classes", "+ extraction ctrl", "CDC standard"] },
+                  ] : [
+                    { id: "full", name: `Full ${activeOrganism.name} panel`, targets: ALL_INDICES.length + " targets",
+                      desc: `All catalogued AMR targets for ${activeOrganism.name}.`,
+                      meta: [[...new Set(orgMutations.map(m => m.drug))].length + " drug classes", "All tiers"] },
+                  ]),
+                  { id: "core5", name: "Core 5-plex", targets: CORE5_INDICES.length + " targets",
                     desc: "High-confidence tier-1 mutations only. Point-of-care screening.",
-                    meta: ["4 drug classes", "Tier 1", "High confidence"] },
+                    meta: [[...new Set(CORE5_INDICES.map(i => orgMutations[i]?.drug))].length + " drug classes", "Tier 1", "High confidence"] },
                   { id: "custom", name: "Custom Panel", targets: panel === "custom" ? selected.size + " targets" : "",
                     desc: "Select individual mutations for targeted re-design or validation.",
                     meta: [] },
@@ -387,11 +447,11 @@ const HomePage = ({ goTo, connected }) => {
                 {/* Drug filter chips; only for Custom panel */}
                 {panel === "custom" && (
                   <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", padding: "12px 16px", borderBottom: `1px solid ${T.borderLight}` }}>
-                    <button onClick={() => setSelected(new Set(ALL_INDICES))} style={{ padding: "5px 12px", borderRadius: "4px", border: `1px solid ${T.border}`, background: selected.size === MUTATIONS.length ? T.primary : T.bg, color: selected.size === MUTATIONS.length ? "#fff" : T.textSec, fontSize: "11px", fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>All ({MUTATIONS.length})</button>
+                    <button onClick={() => setSelected(new Set(ALL_INDICES))} style={{ padding: "5px 12px", borderRadius: "4px", border: `1px solid ${T.border}`, background: selected.size === orgMutations.length ? T.primary : T.bg, color: selected.size === orgMutations.length ? "#fff" : T.textSec, fontSize: "11px", fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>All ({orgMutations.length})</button>
                     <button onClick={() => setSelected(new Set())} style={{ padding: "5px 12px", borderRadius: "4px", border: `1px solid ${T.border}`, background: selected.size === 0 ? T.bgSub : T.bg, color: T.textSec, fontSize: "11px", fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>None</button>
                     <div style={{ width: 1, background: T.border, margin: "0 4px" }} />
-                    {[...new Set(MUTATIONS.map(m => m.drug))].map(drug => {
-                      const indices = MUTATIONS.map((m, i) => m.drug === drug ? i : -1).filter(i => i >= 0);
+                    {[...new Set(orgMutations.map(m => m.drug))].map(drug => {
+                      const indices = orgMutations.map((m, i) => m.drug === drug ? i : -1).filter(i => i >= 0);
                       const allSel = indices.every(i => selected.has(i));
                       return (
                         <button key={drug} onClick={() => {
@@ -416,7 +476,7 @@ const HomePage = ({ goTo, connected }) => {
                     </tr>
                   </thead>
                   <tbody>
-                    {MUTATIONS.map((m, i) => {
+                    {orgMutations.map((m, i) => {
                       if (panel !== "custom" && !selected.has(i)) return null;
                       const isCustom = panel === "custom";
                       return (
@@ -432,7 +492,7 @@ const HomePage = ({ goTo, connected }) => {
                             </td>
                           )}
                           <td style={{ padding: "10px 12px", fontWeight: 600, fontFamily: MONO, color: T.text, fontSize: "12px" }}>{m.gene}</td>
-                          <td style={{ padding: "10px 12px", fontFamily: MONO, fontSize: "12px", color: T.textSec }}>{m.ref}{m.pos}{m.alt}</td>
+                          <td style={{ padding: "10px 12px", fontFamily: MONO, fontSize: "12px", color: T.textSec }}>{m.category === "gene_presence" ? "presence" : `${m.ref}${m.pos}${m.alt}`}</td>
                           <td style={{ padding: "10px 12px" }}><DrugBadge drug={m.drug} /></td>
                           <td style={{ padding: "10px 12px" }}><Badge variant={m.conf === "High" ? "success" : "warning"}>{m.conf}</Badge></td>
                           <td style={{ padding: "10px 12px" }}><Badge variant={m.tier === 1 ? "primary" : "default"}>Tier {m.tier}</Badge></td>
@@ -575,7 +635,7 @@ const HomePage = ({ goTo, connected }) => {
           <div style={{ display: "flex", gap: "16px", fontSize: "13px", flexWrap: "wrap", alignItems: "center", color: T.textSec }}>
             <span>{selected.size} targets</span>
             <span style={{ color: T.borderStrong }}>·</span>
-            <span>{[...new Set([...selected].map(i => MUTATIONS[i]?.drug))].length} drug classes</span>
+            <span>{[...new Set([...selected].map(i => orgMutations[i]?.drug))].length} drug classes</span>
             <span style={{ color: T.borderStrong }}>·</span>
             <span>{mode === "custom" ? selectedModules.size : MODULES.length} modules</span>
           </div>

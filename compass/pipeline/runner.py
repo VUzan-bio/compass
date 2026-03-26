@@ -16,7 +16,7 @@ Pipeline stages:
   Module 7: Multiplex optimization → select best candidate per target
   Module 8: RPA primer design → standard + AS-RPA primer pairs
   Module 8.5: Co-selection validation → verify crRNA-primer compatibility
-  Module 9: Panel assembly → MultiplexPanel with IS6110 control
+  Module 9: Panel assembly → MultiplexPanel with species identification control
   Module 10: Export → JSON, TSV, and structured outputs
 
 Key design decisions:
@@ -27,8 +27,8 @@ Key design decisions:
     organism preset, NOT from pipeline config.
   - PROXIMITY candidates are routed through AS-RPA primer design instead of
     standard RPA. The co-selection validator ensures compatibility.
-  - The IS6110 M.tb species identification channel is added as a hardcoded
-    literature-validated crRNA (Ai et al. 2019). No pipeline processing needed.
+  - Species identification controls are loaded from organism profiles
+    (data/organisms/*.json). Each organism defines its own validated crRNA.
 
 """
 
@@ -49,7 +49,7 @@ from compass.candidates.synthetic_mismatch import (
     enhance_from_scored_candidates,
 )
 from compass.core.config import PipelineConfig
-from compass.core.constants import IS6110_PAM, IS6110_SPACER
+from compass.core.organisms import load_organism, OrganismProfile, SpeciesControl
 from compass.core.types import (
     CrRNACandidate,
     DetectionStrategy,
@@ -90,6 +90,14 @@ _ORGANISM_PRESETS = {
     "ecoli": OrganismPreset.ESCHERICHIA_COLI,
     "saureus": OrganismPreset.STAPHYLOCOCCUS_AUREUS,
     "paeruginosa": OrganismPreset.PSEUDOMONAS_AERUGINOSA,
+    "kpneumoniae": OrganismPreset.KLEBSIELLA_PNEUMONIAE,
+    "ngonorrhoeae": OrganismPreset.NEISSERIA_GONORRHOEAE,
+    "abaumannii": OrganismPreset.ACINETOBACTER_BAUMANNII,
+    "senterica": OrganismPreset.SALMONELLA_ENTERICA,
+    "efaecium": OrganismPreset.ENTEROCOCCUS_FAECIUM,
+    "high_gc": OrganismPreset.GENERIC_HIGH_GC,
+    "medium_gc": OrganismPreset.GENERIC_MEDIUM_GC,
+    "low_gc": OrganismPreset.GENERIC_LOW_GC,
 }
 
 
@@ -108,12 +116,21 @@ class COMPASSPipeline:
         self._output = Path(config.output_dir)
         self._output.mkdir(parents=True, exist_ok=True)
 
+        # Load organism profile (gene synonyms, offsets, species control, weights)
+        try:
+            self._organism = load_organism(config.organism)
+        except FileNotFoundError:
+            logger.warning(
+                "No organism profile for '%s' — using empty defaults", config.organism
+            )
+            self._organism = None
+
         # Module 1: Target resolver
-        # Known codon numbering offsets for M.tb WHO catalogue
-        # katG: WHO S315T = H37Rv position 315 (no offset for most)
-        # pncA: WHO H57D = H37Rv position 57
-        # These may vary by genome build; brute-force scan handles mismatches
-        mtb_offsets = {"rpoB": [0, 81], "katG": [0], "pncA": [0], "gyrA": [0, 3]}
+        # Codon offsets are organism-specific (e.g. rpoB +81 for M.tb WHO numbering)
+        known_offsets = self._organism.codon_offsets if self._organism else {}
+        default_accession = (
+            self._organism.reference_accession if self._organism else "NC_000962.3"
+        )
         self.resolver = TargetResolver(
             fasta=str(config.reference.genome_fasta),
             gff=str(config.reference.gff_annotation)
@@ -122,7 +139,8 @@ class COMPASSPipeline:
             genbank=str(config.reference.genbank_annotation)
             if config.reference.genbank_annotation
             else None,
-            known_offsets=mtb_offsets,
+            known_offsets=known_offsets,
+            default_accession=default_accession,
         )
 
         # Module 2: PAM scanner
@@ -141,9 +159,9 @@ class COMPASSPipeline:
         ot_databases = []
         if config.reference.genome_index:
             ot_databases.append(ScreeningDatabase(
-                name="mtb",
+                name=config.organism,
                 index_path=config.reference.genome_index,
-                category="mtb",
+                category=config.organism,
             ))
         if config.reference.human_index:
             ot_databases.append(ScreeningDatabase(
@@ -159,8 +177,12 @@ class COMPASSPipeline:
             ))
         self.screener = OffTargetScreener(databases=ot_databases)
 
-        # Module 5: Heuristic scorer (organism-aware weights for TB)
-        self.heuristic_scorer = HeuristicScorer(organism=config.organism)
+        # Module 5: Heuristic scorer (organism-aware weights)
+        _hw = self._organism.heuristic_weights if self._organism else None
+        _gc_opt = self._organism.gc_optimal if self._organism else None
+        self.heuristic_scorer = HeuristicScorer(
+            organism=config.organism, weights=_hw, gc_optimal_override=_gc_opt
+        )
 
         # Module 5 ML: scorer selection (Compass-ML or SeqCNN)
         if config.scoring.scorer == "compass_ml":
@@ -335,7 +357,7 @@ class COMPASSPipeline:
                 the optimizer weights and thresholds are adjusted accordingly.
 
         Returns a MultiplexPanel with crRNAs, primers, discrimination
-        scores, and the IS6110 positive control.
+        scores, and the organism-specific species identification control.
         """
         self._stats = []
         pipeline_t0 = time.perf_counter_ns()
@@ -1284,75 +1306,80 @@ class COMPASSPipeline:
             "breakdown": {"asrpa_scored": n_asrpa_disc, "dimer_flagged": n_dimer_flagged},
         })
 
-        # --- Module 9: Panel assembly + IS6110 control ---
+        # --- Module 9: Panel assembly + species identification control ---
         t0 = time.perf_counter_ns()
-        logger.info("Module 9: Panel assembly + IS6110 control...")
-        pre_is6110_plex = panel.plex
-        if self.config.multiplex.include_is6110:
-            panel = self._add_is6110_control(panel)
+        sp_ctrl = self._organism.species_control if self._organism else None
+        ctrl_name = sp_ctrl.name if sp_ctrl else "none"
+        logger.info("Module 9: Panel assembly + %s species control...", ctrl_name)
+        pre_ctrl_plex = panel.plex
 
-            # Design primers for IS6110 (added after Module 8, needs its own step)
-            is6110_member = panel.members[-1]  # just appended
-            is6110_cand = is6110_member.selected_candidate.candidate
-            if is6110_cand.candidate_id.startswith("IS6110"):
-                is6110_pairs = []
-                if genome_seq:
-                    is6110_pairs = std_rpa.design(
-                        candidate=is6110_cand,
-                        target=is6110_member.target,
-                        genome_seq=genome_seq,
-                    )
-                if is6110_pairs:
-                    is6110_member.primers = is6110_pairs[0]
-                    logger.info(
-                        "  IS6110: primers OK (amp=%dbp)",
-                        is6110_pairs[0].amplicon_length,
-                    )
-                else:
-                    # Hard fallback: published IS6110 primers (Ai et al. 2019)
-                    from compass.core.constants import (
-                        IS6110_FWD_PRIMER,
-                        IS6110_REV_PRIMER,
-                        IS6110_AMPLICON_LENGTH,
-                    )
-                    from Bio.SeqUtils import MeltingTemp as _mt
-                    from Bio.Seq import Seq as _Seq
+        if self.config.multiplex.include_species_control and sp_ctrl is not None:
+            panel = self._add_species_control(panel, sp_ctrl)
 
-                    fwd_tm = float(_mt.Tm_NN(_Seq(IS6110_FWD_PRIMER), nn_table=_mt.DNA_NN3))
-                    rev_tm = float(_mt.Tm_NN(_Seq(IS6110_REV_PRIMER), nn_table=_mt.DNA_NN3))
-                    mid = is6110_cand.genomic_start
+            # Design primers for the species control channel
+            ctrl_member = panel.members[-1]  # just appended
+            ctrl_cand = ctrl_member.selected_candidate.candidate
+            ctrl_pairs = []
+            if genome_seq:
+                ctrl_pairs = std_rpa.design(
+                    candidate=ctrl_cand,
+                    target=ctrl_member.target,
+                    genome_seq=genome_seq,
+                )
+            if ctrl_pairs:
+                ctrl_member.primers = ctrl_pairs[0]
+                logger.info(
+                    "  %s: primers OK (amp=%dbp)",
+                    ctrl_name, ctrl_pairs[0].amplicon_length,
+                )
+            elif sp_ctrl.fwd_primer and sp_ctrl.rev_primer:
+                # Fallback: use published primers from organism profile
+                from Bio.SeqUtils import MeltingTemp as _mt
+                from Bio.Seq import Seq as _Seq
 
-                    is6110_member.primers = RPAPrimerPair(
-                        fwd=RPAPrimer(
-                            seq=IS6110_FWD_PRIMER,
-                            tm=fwd_tm,
-                            direction="fwd",
-                            amplicon_start=mid - IS6110_AMPLICON_LENGTH // 2,
-                            amplicon_end=mid + IS6110_AMPLICON_LENGTH // 2,
-                        ),
-                        rev=RPAPrimer(
-                            seq=IS6110_REV_PRIMER,
-                            tm=rev_tm,
-                            direction="rev",
-                            amplicon_start=mid - IS6110_AMPLICON_LENGTH // 2,
-                            amplicon_end=mid + IS6110_AMPLICON_LENGTH // 2,
-                        ),
-                        detection_strategy=DetectionStrategy.DIRECT,
-                    )
-                    logger.info(
-                        "  IS6110: using published primers (Ai et al. 2019, amp=%dbp)",
-                        IS6110_AMPLICON_LENGTH,
-                    )
+                fwd_tm = float(_mt.Tm_NN(_Seq(sp_ctrl.fwd_primer), nn_table=_mt.DNA_NN3))
+                rev_tm = float(_mt.Tm_NN(_Seq(sp_ctrl.rev_primer), nn_table=_mt.DNA_NN3))
+                mid = ctrl_cand.genomic_start
+                amp_len = sp_ctrl.amplicon_length or 120
+
+                ctrl_member.primers = RPAPrimerPair(
+                    fwd=RPAPrimer(
+                        seq=sp_ctrl.fwd_primer,
+                        tm=fwd_tm,
+                        direction="fwd",
+                        amplicon_start=mid - amp_len // 2,
+                        amplicon_end=mid + amp_len // 2,
+                    ),
+                    rev=RPAPrimer(
+                        seq=sp_ctrl.rev_primer,
+                        tm=rev_tm,
+                        direction="rev",
+                        amplicon_start=mid - amp_len // 2,
+                        amplicon_end=mid + amp_len // 2,
+                    ),
+                    detection_strategy=DetectionStrategy.DIRECT,
+                )
+                logger.info(
+                    "  %s: using published primers (%s, amp=%dbp)",
+                    ctrl_name, sp_ctrl.reference, amp_len,
+                )
+            else:
+                logger.warning(
+                    "  %s: no primers available (design failed, no published fallback)",
+                    ctrl_name,
+                )
+        elif self.config.multiplex.include_species_control:
+            logger.info("  No species control defined for organism '%s' — skipping", self.config.organism)
 
         n_direct = len(panel.direct_members)
         n_prox = len(panel.proximity_members)
         self._stats.append({
             "module_id": "M9", "module_name": "Panel Assembly",
             "duration_ms": (time.perf_counter_ns() - t0) // 1_000_000,
-            "candidates_in": pre_is6110_plex,
+            "candidates_in": pre_ctrl_plex,
             "candidates_out": panel.plex,
-            "detail": f"{pre_is6110_plex} candidates + IS6110 species control \u2192 final {panel.plex}-channel panel",
-            "breakdown": {"direct_channels": n_direct, "proximity_channels": n_prox, "species_control": "IS6110"},
+            "detail": f"{pre_ctrl_plex} candidates + {ctrl_name} species control \u2192 final {panel.plex}-channel panel",
+            "breakdown": {"direct_channels": n_direct, "proximity_channels": n_prox, "species_control": ctrl_name},
         })
 
         # --- Module 9.5: Top-K alternatives (Block 3) ---
@@ -1443,14 +1470,14 @@ class COMPASSPipeline:
         logger.info(
             "\n" + "=" * 70 + "\n"
             "  PANEL COMPLETE: %d/%d targets with primers\n"
-            "  Direct: %d | Proximity: %d | IS6110: %s\n"
+            "  Direct: %d | Proximity: %d | Species control: %s\n"
             "  Panel score: %.4f | Total time: %dms\n"
             + "=" * 70,
             n_complete,
             panel.plex,
             n_direct,
             n_prox,
-            "YES" if self.config.multiplex.include_is6110 else "NO",
+            ctrl_name if self.config.multiplex.include_species_control else "NO",
             panel.panel_score or 0.0,
             total_ms,
         )
@@ -1458,64 +1485,57 @@ class COMPASSPipeline:
         return panel
 
     # ==================================================================
-    # IS6110 MTB-positive control
+    # Species identification control (generic, data-driven)
     # ==================================================================
 
-    def _add_is6110_control(self, panel: MultiplexPanel) -> MultiplexPanel:
-        """Add the IS6110 species identification channel.
+    def _add_species_control(
+        self, panel: MultiplexPanel, ctrl: SpeciesControl
+    ) -> MultiplexPanel:
+        """Add organism-specific species identification channel.
 
-        IS6110 is a multi-copy insertion element specific to the
-        M. tuberculosis complex. It serves as a positive control for
-        both species confirmation and DNA extraction quality.
+        Uses pre-validated crRNA from the organism profile (data/organisms/*.json).
+        The spacer and PAM are literature-validated and bypass pipeline design.
 
-        The crRNA is literature-validated (Ai et al. 2019) and does not
-        need pipeline-level design. 6-16 copies per genome ensures
-        high sensitivity.
+        Args:
+            panel: Current multiplex panel to extend.
+            ctrl: SpeciesControl loaded from organism profile.
         """
-        # Build a minimal Target for IS6110
-        # Use IS6110 copy 1 coordinates (889021-890375, + strand in H37Rv)
-        _IS6110_COPY1_START = 889021
-        _IS6110_COPY1_MID = 889698  # midpoint of copy 1
-
-        is6110_mutation = Mutation(
-            gene="IS6110",
+        ctrl_mutation = Mutation(
+            gene=ctrl.name,
             position=0,
             ref_aa="N",
             alt_aa="N",
-            notes="MTB species ID control (6-16 copies/genome)",
+            notes=ctrl.description,
         )
-        is6110_target = Target(
-            mutation=is6110_mutation,
-            genomic_pos=_IS6110_COPY1_MID,
+        ctrl_target = Target(
+            mutation=ctrl_mutation,
+            genomic_pos=ctrl.genomic_mid,
             ref_codon="NNN",
             alt_codon="NNN",
             flanking_seq="N" * 100,
-            flanking_start=_IS6110_COPY1_MID - 50,
+            flanking_start=ctrl.genomic_mid - 50,
         )
 
-        # Build the hardcoded crRNA candidate
-        # Spacer targets conserved region within IS6110 (Ai et al. 2019)
-        # Use copy 1 midpoint as anchor for primer design
-        is6110_candidate = CrRNACandidate(
-            candidate_id="IS6110_ctrl_001",
-            target_label="IS6110_DETECTION",
-            spacer_seq=IS6110_SPACER,
-            pam_seq=IS6110_PAM,
+        ctrl_id = f"{ctrl.name}_ctrl_001"
+        ctrl_candidate = CrRNACandidate(
+            candidate_id=ctrl_id,
+            target_label=f"{ctrl.name}_DETECTION",
+            spacer_seq=ctrl.spacer,
+            pam_seq=ctrl.pam,
             pam_variant=PAMVariant.TTTV,
             strand=Strand.PLUS,
-            genomic_start=_IS6110_COPY1_MID,
-            genomic_end=_IS6110_COPY1_MID + 20,
-            gc_content=sum(1 for b in IS6110_SPACER if b in "GC") / len(IS6110_SPACER),
+            genomic_start=ctrl.genomic_mid,
+            genomic_end=ctrl.genomic_mid + len(ctrl.spacer),
+            gc_content=sum(1 for b in ctrl.spacer if b in "GC") / len(ctrl.spacer),
             homopolymer_max=2,
             pam_activity_weight=1.0,
             detection_strategy=DetectionStrategy.DIRECT,
         )
 
-        # Minimal scored candidate
-        is6110_scored = ScoredCandidate(
-            candidate=is6110_candidate,
+        ctrl_scored = ScoredCandidate(
+            candidate=ctrl_candidate,
             offtarget=OffTargetReport(
-                candidate_id="IS6110_ctrl_001", is_clean=True
+                candidate_id=ctrl_id, is_clean=True
             ),
             heuristic=HeuristicScore(
                 seed_position_score=1.0,
@@ -1533,14 +1553,13 @@ class COMPASSPipeline:
             ),
         )
 
-        is6110_member = PanelMember(
-            target=is6110_target,
-            selected_candidate=is6110_scored,
-            channel="IS6110_MTB_ID",
+        ctrl_member = PanelMember(
+            target=ctrl_target,
+            selected_candidate=ctrl_scored,
+            channel=ctrl.channel_name,
         )
 
-        # Add to panel
-        panel.members.append(is6110_member)
+        panel.members.append(ctrl_member)
         return panel
 
     # ==================================================================

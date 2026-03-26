@@ -52,6 +52,11 @@ export async function getEnzymes() {
   return request("/api/pipeline/enzymes");
 }
 
+// Organisms
+export async function getOrganisms() {
+  return request("/api/pipeline/organisms");
+}
+
 export async function listJobs() {
   return request("/api/pipeline/jobs");
 }

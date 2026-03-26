@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException
 from api.schemas import JobResponse, PipelineRunRequest
 from api.state import AppState, PipelineJob
 from compass.core.enzyme import list_enzymes, get_enzyme, DEFAULT_ENZYME_ID
+from compass.core.organisms import list_organisms, load_organism
 
 router = APIRouter(prefix="/api/pipeline", tags=["pipeline"])
 
@@ -72,3 +73,26 @@ async def get_enzymes() -> dict:
         "enzymes": [e.to_dict() for e in enzymes],
         "default": DEFAULT_ENZYME_ID,
     }
+
+
+@router.get("/organisms")
+async def get_organisms() -> dict:
+    """Return available organism profiles for multi-species panel design."""
+    organism_ids = list_organisms()
+    organisms = []
+    for oid in sorted(organism_ids):
+        try:
+            profile = load_organism(oid)
+            sc = profile.species_control
+            organisms.append({
+                "id": oid,
+                "name": profile.name,
+                "reference_accession": profile.reference_accession,
+                "genome_gc": profile.genome_gc,
+                "genome_length": profile.genome_length,
+                "gene_count": len(profile.gene_synonyms),
+                "species_control": sc.name if sc else None,
+            })
+        except Exception:
+            organisms.append({"id": oid, "name": oid, "error": "failed to load"})
+    return {"organisms": organisms, "default": "mtb"}

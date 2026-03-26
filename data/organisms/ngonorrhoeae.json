@@ -1,0 +1,63 @@
+{
+  "organism_id": "ngonorrhoeae",
+  "name": "Neisseria gonorrhoeae",
+  "reference_accession": "NC_002946.2",
+  "reference_name": "FA 1090",
+  "genome_length": 2153922,
+  "genome_gc": 0.525,
+
+  "gene_synonyms": {
+    "penA":     ["NGO0985"],
+    "mtrR":     ["NGO1366"],
+    "mtrC":     ["NGO1364"],
+    "mtrD":     ["NGO1363"],
+    "mtrE":     ["NGO1365"],
+    "porB":     ["NGO1812"],
+    "ponA":     ["NGO1542"],
+    "pilQ":     ["NGO1271"],
+    "gyrA":     ["NGO0005"],
+    "gyrB":     ["NGO0004"],
+    "parC":     ["NGO1525"],
+    "parE":     ["NGO1526"],
+    "folP":     ["NGO1194"],
+    "rpsJ":     ["NGO2053"],
+    "rplD":     ["NGO2075"],
+    "rplV":     ["NGO2058"],
+    "23S rRNA": ["NGOrrl"],
+    "16S rRNA": ["NGOrrs"],
+    "blaTEM-1": [],
+    "tetM":     [],
+    "ermB":     [],
+    "ermF":     []
+  },
+
+  "codon_offsets": {
+    "penA": [0],
+    "gyrA": [0],
+    "parC": [0],
+    "mtrR": [0]
+  },
+
+  "species_control": {
+    "name": "porA",
+    "description": "Porin A pseudogene — species-specific marker for N. gonorrhoeae (Whiley et al. 2006). Truncated in all N. gonorrhoeae, intact in N. meningitidis — allows definitive species ID.",
+    "reference": "Whiley et al., J Clin Microbiol 2006; Palmer et al., J Clin Microbiol 2003",
+    "spacer": "TGCCGATACGACCTGATGAC",
+    "pam": "TTTC",
+    "genomic_start": 931220,
+    "genomic_mid": 931640,
+    "fwd_primer": null,
+    "rev_primer": null,
+    "amplicon_length": null,
+    "channel_name": "porA_NGONO_ID"
+  },
+
+  "heuristic_weights": {
+    "seed_position": 0.35,
+    "gc": 0.20,
+    "structure": 0.20,
+    "homopolymer": 0.10,
+    "offtarget": 0.15
+  },
+  "gc_optimal": 0.52
+}

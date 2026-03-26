@@ -70,37 +70,72 @@ class PAMVariant(str, Enum):
 class Drug(str, Enum):
     """Antimicrobial drugs covered by COMPASS diagnostic panels.
 
-    Covers first-line, second-line, and Group A/B/C agents
-    per WHO 2022 treatment guidelines.
+    Covers TB drugs (WHO 2022) plus ESKAPE-relevant antimicrobials
+    for multi-species AMR diagnostic panel design.
     """
-    # First-line
+    # --- TB: First-line ---
     ISONIAZID = "INH"
     RIFAMPICIN = "RIF"
     ETHAMBUTOL = "EMB"
     PYRAZINAMIDE = "PZA"
-    # Fluoroquinolones (Group A)
+    # --- TB: Fluoroquinolones (Group A) ---
     FLUOROQUINOLONE = "FQ"
     LEVOFLOXACIN = "LFX"
     MOXIFLOXACIN = "MFX"
-    # Group A
+    # --- TB: Group A ---
     BEDAQUILINE = "BDQ"
     LINEZOLID = "LZD"
-    # Group B
+    # --- TB: Group B ---
     CLOFAZIMINE = "CFZ"
     CYCLOSERINE = "CS"
-    # Group C / injectable
+    # --- TB: Group C / injectable ---
     AMINOGLYCOSIDE = "AG"
     AMIKACIN = "AMK"
     KANAMYCIN = "KAN"
     CAPREOMYCIN = "CAP"
     STREPTOMYCIN = "STR"
-    # Newer agents
+    # --- TB: Newer agents ---
     DELAMANID = "DLM"
     PRETOMANID = "PMD"
-    # Para-aminosalicylic acid
+    # --- TB: Other ---
     PAS = "PAS"
     ETHIONAMIDE = "ETH"
-    # Generic / multi-drug
+    # --- Beta-lactams (ESKAPE) ---
+    METHICILLIN = "MET"
+    OXACILLIN = "OXA"
+    AMPICILLIN = "AMP"
+    PENICILLIN = "PEN"
+    CEFTRIAXONE = "CRO"
+    CEFOTAXIME = "CTX"
+    CEFTAZIDIME = "CAZ"
+    CARBAPENEM = "CAR"
+    MEROPENEM = "MEM"
+    IMIPENEM = "IPM"
+    # --- Glycopeptides ---
+    VANCOMYCIN = "VAN"
+    TEICOPLANIN = "TEC"
+    # --- Polymyxins ---
+    COLISTIN = "CST"
+    # --- Macrolides / Azalides ---
+    AZITHROMYCIN = "AZM"
+    CLARITHROMYCIN = "CLR"
+    ERYTHROMYCIN = "ERY"
+    # --- Tetracyclines ---
+    TETRACYCLINE = "TET"
+    TIGECYCLINE = "TGC"
+    DOXYCYCLINE = "DOX"
+    # --- Sulfonamides / Trimethoprim ---
+    TRIMETHOPRIM_SULFAMETHOXAZOLE = "SXT"
+    # --- Other ESKAPE-relevant ---
+    CIPROFLOXACIN = "CIP"
+    GENTAMICIN = "GEN"
+    TOBRAMYCIN = "TOB"
+    DAPTOMYCIN = "DAP"
+    NITROFURANTOIN = "NIT"
+    FOSFOMYCIN = "FOS"
+    CHLORAMPHENICOL = "CHL"
+    SPECTINOMYCIN = "SPT"
+    # --- Generic / multi-drug ---
     MULTI_DRUG = "MDR"
     OTHER = "OTHER"
 

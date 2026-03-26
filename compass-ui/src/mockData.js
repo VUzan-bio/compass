@@ -18,21 +18,69 @@ const WHO_REFS = {
   "gyrA_A90V": { who: "Associated", catalogue: "WHO Mutation Catalogue, 2nd ed. (2023)", cryptic: "CRyPTIC Consortium (2022)", freq: "15–30% of FQ-R" },
   "rrs_A1401G": { who: "Associated", catalogue: "WHO Mutation Catalogue, 2nd ed. (2023)", cryptic: "CRyPTIC Consortium (2022)", freq: "70–90% of AG-R" },
   "eis_C-14T": { who: "Associated", catalogue: "WHO Mutation Catalogue, 2nd ed. (2023)", cryptic: "CRyPTIC Consortium (2022)", freq: "5–15% of AG-R (KAN)" },
+  // E. coli ESBL / CRE
+  "blaCTX-M-15_presence": { who: "WHO Priority", catalogue: "CARD (2024)", cryptic: null, freq: "Most prevalent ESBL globally" },
+  "blaCTX-M-14_presence": { who: "WHO Priority", catalogue: "CARD (2024)", cryptic: null, freq: "2nd most common CTX-M worldwide" },
+  "blaCTX-M-27_presence": { who: "WHO Priority", catalogue: "CARD (2024)", cryptic: null, freq: "Emerging in E. coli ST131 C2 clade" },
+  "blaNDM-1_presence": { who: "WHO Critical", catalogue: "CARD (2024); WHO GLASS (2023)", cryptic: null, freq: "Dominant MBL in South Asia, spreading globally" },
+  "blaNDM-5_presence": { who: "WHO Critical", catalogue: "CARD (2024)", cryptic: null, freq: "Enhanced activity NDM variant; community E. coli" },
+  "blaKPC-2_presence": { who: "WHO Critical", catalogue: "CARD (2024); WHO GLASS (2023)", cryptic: null, freq: "Dominant serine carbapenemase in Americas" },
+  "blaKPC-3_presence": { who: "WHO Critical", catalogue: "CARD (2024)", cryptic: null, freq: "KPC variant; K. pneumoniae → E. coli HGT" },
+  "blaOXA-48_presence": { who: "WHO Critical", catalogue: "CARD (2024); WHO GLASS (2023)", cryptic: null, freq: "Weak carbapenem hydrolysis; hard to detect phenotypically" },
+  "mcr-1_presence": { who: "WHO Critical", catalogue: "CARD (2024); Liu et al. Lancet ID (2016)", cryptic: null, freq: "Plasmid-mediated colistin-R; last-resort drug" },
+  "ecoli_gyrA_S83L": { who: "Associated", catalogue: "CARD (2024); EUCAST (2023)", cryptic: null, freq: "Primary FQ-R in E. coli QRDR" },
+  "ecoli_gyrA_D87N": { who: "Associated", catalogue: "CARD (2024); EUCAST (2023)", cryptic: null, freq: "2nd-step FQ-R; +S83L = high-level" },
+  "ecoli_parC_S80I": { who: "Associated", catalogue: "CARD (2024)", cryptic: null, freq: "Topo IV; contributes to high-level FQ-R" },
+  "ecoli_parC_E84V": { who: "Interim", catalogue: "CARD (2024)", cryptic: null, freq: "Auxiliary FQ-R determinant" },
+  "ampC_P-42L": { who: "Associated", catalogue: "CARD (2024); Jacoby (2009)", cryptic: null, freq: "Promoter ↑ AmpC → cephalosporin-R" },
+  // S. aureus MRSA / VRSA
+  "mecA_presence": { who: "WHO Critical", catalogue: "EUCAST (2023); CLSI (2024)", cryptic: null, freq: "Defines MRSA; PBP2a on SCCmec" },
+  "mecC_presence": { who: "WHO Critical", catalogue: "EUCAST (2023); Podkowik et al. (2025)", cryptic: null, freq: "mecA homolog SCCmec XI; missed by some PCRs" },
+  "vanA_presence": { who: "WHO Critical", catalogue: "CLSI (2024); CDC VRSA (2023)", cryptic: null, freq: "Defines VRSA; transferred from Enterococcus" },
+  "blaZ_presence": { who: "Associated", catalogue: "EUCAST (2023)", cryptic: null, freq: ">90% S. aureus carry blaZ" },
+  "sa_gyrA_S84L": { who: "Associated", catalogue: "EUCAST (2023); CLSI (2024)", cryptic: null, freq: "Primary FQ-R in S. aureus QRDR" },
+  "grlA_S80F": { who: "Associated", catalogue: "EUCAST (2023); Hooper & Jacoby (2016)", cryptic: null, freq: "ParC equivalent; primary FQ target in S. aureus" },
+  "grlA_S80Y": { who: "Interim", catalogue: "EUCAST (2023)", cryptic: null, freq: "Alternative grlA QRDR mutation" },
+  "sa_rpoB_H481N": { who: "Associated", catalogue: "EUCAST (2023); CLSI (2024)", cryptic: null, freq: "RIF-R RRDR cluster I (≡ E. coli H526N)" },
+  "sa_rpoB_S464P": { who: "Associated", catalogue: "EUCAST (2023)", cryptic: null, freq: "High-level RIF-R; RRDR" },
+  "fusA_L461K": { who: "Associated", catalogue: "EUCAST (2023); Castanheira et al. (2020)", cryptic: null, freq: "Fusidic acid-R; EF-G domain III" },
+  "dfrB_F99Y": { who: "Associated", catalogue: "CARD (2024); EUCAST (2023)", cryptic: null, freq: "Trimethoprim-R; DHFR active site" },
+  "ermA_presence": { who: "Associated", catalogue: "CLSI (2024); Leclercq (2002)", cryptic: null, freq: "MLSb resistance (macrolides/lincosamides/streptogramin B)" },
+  "ermC_presence": { who: "Associated", catalogue: "CLSI (2024); Leclercq (2002)", cryptic: null, freq: "Plasmid-borne MLSb; inducible/constitutive" },
+  "cfr_presence": { who: "Associated", catalogue: "CARD (2024); Long et al. (2006)", cryptic: null, freq: "23S rRNA methyltransferase; LZD + PhLOPSA-R" },
+  "mprF_S295L": { who: "Associated", catalogue: "EUCAST (2023); Bayer et al. (2015)", cryptic: null, freq: "Daptomycin non-susceptibility; ↑ lysyl-PG" },
+  // N. gonorrhoeae AMR
+  "penA_A501V": { who: "WHO Urgent", catalogue: "WHO gonococcal AMR (2023); Unemo et al. (2019)", cryptic: null, freq: "Mosaic penA; reduced CRO susceptibility" },
+  "penA_A501T": { who: "WHO Urgent", catalogue: "WHO gonococcal AMR (2023)", cryptic: null, freq: "Alternative mosaic mutation at 501" },
+  "penA_G545S": { who: "WHO Urgent", catalogue: "WHO gonococcal AMR (2023); Grad et al. (2016)", cryptic: null, freq: "Mosaic penA; ESC-R in combination" },
+  "penA_I312M": { who: "Interim", catalogue: "Unemo et al. (2019)", cryptic: null, freq: "Mosaic penA; intermediate CRO" },
+  "penA_V316T": { who: "Interim", catalogue: "Unemo et al. (2019)", cryptic: null, freq: "Mosaic penA; combinatorial ESC-R" },
+  "penA_T483S": { who: "Interim", catalogue: "Unemo et al. (2019)", cryptic: null, freq: "Mosaic penA; ESC-R contribution" },
+  "ng_gyrA_S91F": { who: "Associated", catalogue: "WHO gonococcal AMR (2023); EUCAST (2023)", cryptic: null, freq: "Primary CIP-R; QRDR hot spot" },
+  "ng_gyrA_D95A": { who: "Associated", catalogue: "WHO gonococcal AMR (2023)", cryptic: null, freq: "2nd-step FQ-R; +S91F = high-level" },
+  "ng_gyrA_D95G": { who: "Associated", catalogue: "WHO gonococcal AMR (2023)", cryptic: null, freq: "Alternative D95 substitution" },
+  "ng_parC_D86N": { who: "Interim", catalogue: "Unemo et al. (2019)", cryptic: null, freq: "Auxiliary FQ-R; Topo IV" },
+  "ng_parC_S87R": { who: "Interim", catalogue: "Unemo et al. (2019)", cryptic: null, freq: "parC QRDR mutation; FQ-R" },
+  "23S_C2611T": { who: "Associated", catalogue: "WHO gonococcal AMR (2023); Chisholm et al. (2010)", cryptic: null, freq: "High-level AZM-R; single 23S rRNA SNP" },
+  "23S_A2059G": { who: "Associated", catalogue: "WHO gonococcal AMR (2023)", cryptic: null, freq: "AZM-R; macrolide target site" },
+  "mtrR_A-35del": { who: "Associated", catalogue: "WHO gonococcal AMR (2023); Ohnishi et al. (2011)", cryptic: null, freq: "Promoter del → ↑ MtrCDE efflux" },
+  "tetM_presence": { who: "Associated", catalogue: "CARD (2024); Roberts (2005)", cryptic: null, freq: "Ribosomal protection; conjugative TET-R" },
+  "folP_R228S": { who: "Associated", catalogue: "Unemo et al. (2019)", cryptic: null, freq: "Sulfonamide-R; DHPS active site" },
 };
 
 const MUTATIONS = [
-  { gene: "rpoB", ref: "S", pos: 531, alt: "L", drug: "RIF", drugFull: "Rifampicin", conf: "High", tier: 1 },
-  { gene: "rpoB", ref: "H", pos: 526, alt: "Y", drug: "RIF", drugFull: "Rifampicin", conf: "High", tier: 1 },
-  { gene: "rpoB", ref: "D", pos: 516, alt: "V", drug: "RIF", drugFull: "Rifampicin", conf: "High", tier: 1 },
-  { gene: "katG", ref: "S", pos: 315, alt: "T", drug: "INH", drugFull: "Isoniazid", conf: "High", tier: 1 },
-  { gene: "fabG1", ref: "C", pos: -15, alt: "T", drug: "INH", drugFull: "Isoniazid", conf: "High", tier: 1 },
-  { gene: "embB", ref: "M", pos: 306, alt: "V", drug: "EMB", drugFull: "Ethambutol", conf: "High", tier: 1 },
-  { gene: "embB", ref: "M", pos: 306, alt: "I", drug: "EMB", drugFull: "Ethambutol", conf: "Moderate", tier: 2 },
-  { gene: "pncA", ref: "H", pos: 57, alt: "D", drug: "PZA", drugFull: "Pyrazinamide", conf: "Moderate", tier: 2 },
-  { gene: "gyrA", ref: "D", pos: 94, alt: "G", drug: "FQ", drugFull: "Fluoroquinolones", conf: "High", tier: 1 },
-  { gene: "gyrA", ref: "A", pos: 90, alt: "V", drug: "FQ", drugFull: "Fluoroquinolones", conf: "High", tier: 1 },
-  { gene: "rrs", ref: "A", pos: 1401, alt: "G", drug: "AG", drugFull: "Amikacin", conf: "High", tier: 1 },
-  { gene: "eis", ref: "C", pos: -14, alt: "T", drug: "AG", drugFull: "Amikacin", conf: "High", tier: 1 },
+  { gene: "rpoB", ref: "S", pos: 531, alt: "L", drug: "RIF", drugFull: "Rifampicin", conf: "High", tier: 1, category: "aa_substitution" },
+  { gene: "rpoB", ref: "H", pos: 526, alt: "Y", drug: "RIF", drugFull: "Rifampicin", conf: "High", tier: 1, category: "aa_substitution" },
+  { gene: "rpoB", ref: "D", pos: 516, alt: "V", drug: "RIF", drugFull: "Rifampicin", conf: "High", tier: 1, category: "aa_substitution" },
+  { gene: "katG", ref: "S", pos: 315, alt: "T", drug: "INH", drugFull: "Isoniazid", conf: "High", tier: 1, category: "aa_substitution" },
+  { gene: "fabG1", ref: "C", pos: -15, alt: "T", drug: "INH", drugFull: "Isoniazid", conf: "High", tier: 1, category: "promoter" },
+  { gene: "embB", ref: "M", pos: 306, alt: "V", drug: "EMB", drugFull: "Ethambutol", conf: "High", tier: 1, category: "aa_substitution" },
+  { gene: "embB", ref: "M", pos: 306, alt: "I", drug: "EMB", drugFull: "Ethambutol", conf: "Moderate", tier: 2, category: "aa_substitution" },
+  { gene: "pncA", ref: "H", pos: 57, alt: "D", drug: "PZA", drugFull: "Pyrazinamide", conf: "Moderate", tier: 2, category: "aa_substitution" },
+  { gene: "gyrA", ref: "D", pos: 94, alt: "G", drug: "FQ", drugFull: "Fluoroquinolones", conf: "High", tier: 1, category: "aa_substitution" },
+  { gene: "gyrA", ref: "A", pos: 90, alt: "V", drug: "FQ", drugFull: "Fluoroquinolones", conf: "High", tier: 1, category: "aa_substitution" },
+  { gene: "rrs", ref: "A", pos: 1401, alt: "G", drug: "AG", drugFull: "Amikacin", conf: "High", tier: 1, category: "rrna" },
+  { gene: "eis", ref: "C", pos: -14, alt: "T", drug: "AG", drugFull: "Amikacin", conf: "High", tier: 1, category: "promoter" },
 ];
 
 const RESULTS = MUTATIONS.map((m, i) => {
@@ -72,7 +120,7 @@ const RESULTS = MUTATIONS.map((m, i) => {
   };
 });
 RESULTS.push({
-  gene: "IS6110", ref: "N", pos: 0, alt: "N", drug: "OTHER", drugFull: "Other", conf: "N/A", tier: 0,
+  gene: "IS6110", ref: "N", pos: 0, alt: "N", drug: "OTHER", drugFull: "Other", conf: "N/A", tier: 0, category: "gene_presence",
   label: "IS6110", strategy: "Direct", spacer: "AATGTCGCCGCGATCGAGCG", wtSpacer: "AATGTCGCCGCGATCGAGCG",
   pam: "TTTG", pamVariant: "TTTV", pamPenalty: 1.0, isCanonicalPam: true,
   score: 0.95, cnnScore: 0.88, cnnCalibrated: 0.91, pamAdjusted: 0.91,
@@ -320,9 +368,107 @@ const BIBLIOGRAPHY = [
   { id: "piepenburg2006", authors: "Piepenburg O, Williams CH, Stemple DL, Armes NA", year: 2006, title: "DNA detection using recombination proteins", journal: "PLoS Biology", doi: "10.1371/journal.pbio.0040204", pmid: "16756388", category: "Isothermal Amplification" },
 ];
 
+// ── Organism presets for multi-species support ──
+const ORGANISMS = [
+  {
+    id: "mtb", name: "M. tuberculosis", reference: "H37Rv",
+    accession: "NC_000962.3", gc: 0.656, priority: "WHO Critical",
+    description: "Multi-drug resistant tuberculosis (MDR/XDR-TB)",
+    mutations: MUTATIONS, // reuse existing MTB mutations
+  },
+  {
+    id: "ecoli", name: "E. coli", reference: "K-12 MG1655",
+    accession: "NC_000913.3", gc: 0.508, priority: "WHO Critical",
+    description: "ESBL-producing E. coli + Enterobacterales carbapenemase panel (NDM/KPC/OXA-48)",
+    mutations: [
+      // ESBLs — gene presence
+      { gene: "blaCTX-M-15", ref: "-", pos: 0, alt: "presence", drug: "CTX", drugFull: "Cefotaxime", conf: "High", tier: 1, category: "gene_presence" },
+      { gene: "blaCTX-M-14", ref: "-", pos: 0, alt: "presence", drug: "CTX", drugFull: "Cefotaxime", conf: "High", tier: 1, category: "gene_presence" },
+      { gene: "blaCTX-M-27", ref: "-", pos: 0, alt: "presence", drug: "CTX", drugFull: "Cefotaxime", conf: "High", tier: 1, category: "gene_presence" },
+      // Carbapenemases — gene presence
+      { gene: "blaNDM-1", ref: "-", pos: 0, alt: "presence", drug: "CAR", drugFull: "Carbapenem", conf: "High", tier: 1, category: "gene_presence" },
+      { gene: "blaNDM-5", ref: "-", pos: 0, alt: "presence", drug: "CAR", drugFull: "Carbapenem", conf: "High", tier: 1, category: "gene_presence" },
+      { gene: "blaKPC-2", ref: "-", pos: 0, alt: "presence", drug: "CAR", drugFull: "Carbapenem", conf: "High", tier: 1, category: "gene_presence" },
+      { gene: "blaKPC-3", ref: "-", pos: 0, alt: "presence", drug: "CAR", drugFull: "Carbapenem", conf: "High", tier: 1, category: "gene_presence" },
+      { gene: "blaOXA-48", ref: "-", pos: 0, alt: "presence", drug: "CAR", drugFull: "Carbapenem", conf: "High", tier: 1, category: "gene_presence" },
+      // Colistin — last resort
+      { gene: "mcr-1", ref: "-", pos: 0, alt: "presence", drug: "CST", drugFull: "Colistin", conf: "High", tier: 1, category: "gene_presence" },
+      // Fluoroquinolone QRDR mutations
+      { gene: "gyrA", ref: "S", pos: 83, alt: "L", drug: "CIP", drugFull: "Ciprofloxacin", conf: "High", tier: 1, category: "aa_substitution" },
+      { gene: "gyrA", ref: "D", pos: 87, alt: "N", drug: "CIP", drugFull: "Ciprofloxacin", conf: "High", tier: 1, category: "aa_substitution" },
+      { gene: "parC", ref: "S", pos: 80, alt: "I", drug: "CIP", drugFull: "Ciprofloxacin", conf: "Moderate", tier: 2, category: "aa_substitution" },
+      { gene: "parC", ref: "E", pos: 84, alt: "V", drug: "CIP", drugFull: "Ciprofloxacin", conf: "Moderate", tier: 2, category: "aa_substitution" },
+      // AmpC promoter
+      { gene: "ampC", ref: "P", pos: -42, alt: "L", drug: "AMP", drugFull: "Ampicillin", conf: "High", tier: 1, category: "promoter" },
+    ],
+  },
+  {
+    id: "saureus", name: "S. aureus", reference: "NCTC 8325",
+    accession: "NC_007795.1", gc: 0.328, priority: "WHO Critical",
+    description: "Methicillin-resistant S. aureus (MRSA) & vancomycin-resistant (VRSA)",
+    mutations: [
+      // Beta-lactam resistance — gene presence
+      { gene: "mecA", ref: "-", pos: 0, alt: "presence", drug: "MET", drugFull: "Methicillin", conf: "High", tier: 1, category: "gene_presence" },
+      { gene: "mecC", ref: "-", pos: 0, alt: "presence", drug: "MET", drugFull: "Methicillin", conf: "High", tier: 1, category: "gene_presence" },
+      { gene: "blaZ", ref: "-", pos: 0, alt: "presence", drug: "PEN", drugFull: "Penicillin", conf: "High", tier: 1, category: "gene_presence" },
+      // Glycopeptide resistance
+      { gene: "vanA", ref: "-", pos: 0, alt: "presence", drug: "VAN", drugFull: "Vancomycin", conf: "High", tier: 1, category: "gene_presence" },
+      // Fluoroquinolone QRDR
+      { gene: "gyrA", ref: "S", pos: 84, alt: "L", drug: "CIP", drugFull: "Ciprofloxacin", conf: "High", tier: 1, category: "aa_substitution" },
+      { gene: "grlA", ref: "S", pos: 80, alt: "F", drug: "CIP", drugFull: "Ciprofloxacin", conf: "High", tier: 1, category: "aa_substitution" },
+      { gene: "grlA", ref: "S", pos: 80, alt: "Y", drug: "CIP", drugFull: "Ciprofloxacin", conf: "Moderate", tier: 2, category: "aa_substitution" },
+      // Rifampicin RRDR
+      { gene: "rpoB", ref: "H", pos: 481, alt: "N", drug: "RIF", drugFull: "Rifampicin", conf: "High", tier: 1, category: "aa_substitution" },
+      { gene: "rpoB", ref: "S", pos: 464, alt: "P", drug: "RIF", drugFull: "Rifampicin", conf: "High", tier: 1, category: "aa_substitution" },
+      // Other targets
+      { gene: "fusA", ref: "L", pos: 461, alt: "K", drug: "FA", drugFull: "Fusidic acid", conf: "High", tier: 1, category: "aa_substitution" },
+      { gene: "dfrB", ref: "F", pos: 99, alt: "Y", drug: "SXT", drugFull: "Trimethoprim", conf: "High", tier: 1, category: "aa_substitution" },
+      // Macrolide/lincosamide — gene presence
+      { gene: "ermA", ref: "-", pos: 0, alt: "presence", drug: "ERY", drugFull: "Erythromycin", conf: "High", tier: 1, category: "gene_presence" },
+      { gene: "ermC", ref: "-", pos: 0, alt: "presence", drug: "ERY", drugFull: "Erythromycin", conf: "High", tier: 1, category: "gene_presence" },
+      // Oxazolidinone / lipopeptide
+      { gene: "cfr", ref: "-", pos: 0, alt: "presence", drug: "LZD", drugFull: "Linezolid", conf: "High", tier: 1, category: "gene_presence" },
+      { gene: "mprF", ref: "S", pos: 295, alt: "L", drug: "DAP", drugFull: "Daptomycin", conf: "Moderate", tier: 2, category: "aa_substitution" },
+    ],
+  },
+  {
+    id: "ngonorrhoeae", name: "N. gonorrhoeae", reference: "FA 1090",
+    accession: "NC_002946.2", gc: 0.525, priority: "WHO High",
+    description: "Extended-spectrum cephalosporin & azithromycin-resistant gonorrhoea",
+    mutations: [
+      // Mosaic penA — ESC resistance (WHO urgent threat)
+      // Numbering: Ambler PBP2 convention per Unemo et al. 2019 / WHO gonococcal AMR surveillance
+      // Resistance is COMBINATORIAL — individual SNPs have modest effect; high-level CRO-R requires >=3 mosaic mutations
+      // Panel interpretation: flag "mosaic penA detected" when >=2 of these electrodes fire
+      { gene: "penA", ref: "A", pos: 501, alt: "V", drug: "CRO", drugFull: "Ceftriaxone", conf: "High", tier: 1, category: "aa_substitution", combinatorial: "penA_mosaic" },
+      { gene: "penA", ref: "A", pos: 501, alt: "T", drug: "CRO", drugFull: "Ceftriaxone", conf: "High", tier: 1, category: "aa_substitution", combinatorial: "penA_mosaic" },
+      { gene: "penA", ref: "G", pos: 545, alt: "S", drug: "CRO", drugFull: "Ceftriaxone", conf: "High", tier: 1, category: "aa_substitution", combinatorial: "penA_mosaic" },
+      { gene: "penA", ref: "I", pos: 312, alt: "M", drug: "CRO", drugFull: "Ceftriaxone", conf: "Moderate", tier: 2, category: "aa_substitution", combinatorial: "penA_mosaic" },
+      { gene: "penA", ref: "V", pos: 316, alt: "T", drug: "CRO", drugFull: "Ceftriaxone", conf: "Moderate", tier: 2, category: "aa_substitution", combinatorial: "penA_mosaic" },
+      { gene: "penA", ref: "T", pos: 483, alt: "S", drug: "CRO", drugFull: "Ceftriaxone", conf: "Moderate", tier: 2, category: "aa_substitution", combinatorial: "penA_mosaic" },
+      // Fluoroquinolone QRDR
+      { gene: "gyrA", ref: "S", pos: 91, alt: "F", drug: "CIP", drugFull: "Ciprofloxacin", conf: "High", tier: 1, category: "aa_substitution" },
+      { gene: "gyrA", ref: "D", pos: 95, alt: "A", drug: "CIP", drugFull: "Ciprofloxacin", conf: "High", tier: 1, category: "aa_substitution" },
+      { gene: "gyrA", ref: "D", pos: 95, alt: "G", drug: "CIP", drugFull: "Ciprofloxacin", conf: "High", tier: 1, category: "aa_substitution" },
+      { gene: "parC", ref: "D", pos: 86, alt: "N", drug: "CIP", drugFull: "Ciprofloxacin", conf: "Moderate", tier: 2, category: "aa_substitution" },
+      { gene: "parC", ref: "S", pos: 87, alt: "R", drug: "CIP", drugFull: "Ciprofloxacin", conf: "Moderate", tier: 2, category: "aa_substitution" },
+      // Azithromycin — dual therapy failure driver
+      { gene: "23S rRNA", ref: "C", pos: 2611, alt: "T", drug: "AZM", drugFull: "Azithromycin", conf: "High", tier: 1, category: "rrna" },
+      { gene: "23S rRNA", ref: "A", pos: 2059, alt: "G", drug: "AZM", drugFull: "Azithromycin", conf: "High", tier: 1, category: "rrna" },
+      // Efflux pump
+      { gene: "mtrR", ref: "A", pos: -35, alt: "del", drug: "AZM", drugFull: "Azithromycin", conf: "High", tier: 1, category: "promoter" },
+      // Tetracycline — gene presence
+      { gene: "tetM", ref: "-", pos: 0, alt: "presence", drug: "TET", drugFull: "Tetracycline", conf: "High", tier: 1, category: "gene_presence" },
+      // Sulfonamide
+      { gene: "folP", ref: "R", pos: 228, alt: "S", drug: "SXT", drugFull: "Sulfonamide", conf: "High", tier: 1, category: "aa_substitution" },
+    ],
+  },
+];
+
 export {
   seq, WHO_REFS, MUTATIONS, RESULTS,
   CROSS_REACTIVITY_LABELS, CROSS_REACTIVITY_DRUG_GROUPS, MOCK_CROSS_REACTIVITY,
   MODULES, MODULE_NAME_MAP, PROGRESS_TO_STEP, resolveStep,
   SCORING_FEATURES, DRUG_LABELS, BIBLIOGRAPHY,
+  ORGANISMS,
 };

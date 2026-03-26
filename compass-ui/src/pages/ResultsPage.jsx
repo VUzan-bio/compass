@@ -5531,8 +5531,12 @@ const ResultsPage = ({ connected, jobId, scorer: scorerProp, goTo }) => {
       // Filter RESULTS to only selected mutations (+ IS6110 control always included)
       let filtered = RESULTS;
       if (selectedIndices && selectedIndices.length > 0 && selectedIndices.length < RESULTS.length) {
-        const selectedLabels = new Set(selectedIndices.map(i => MUTATIONS[i] ? `${MUTATIONS[i].gene}_${MUTATIONS[i].ref}${MUTATIONS[i].pos}${MUTATIONS[i].alt}` : null).filter(Boolean));
-        filtered = RESULTS.filter(r => selectedLabels.has(r.label) || r.gene === "IS6110");
+        const selectedLabels = new Set(selectedIndices.map(i => {
+          const m = MUTATIONS[i];
+          if (!m) return null;
+          return m.category === "gene_presence" ? m.gene : `${m.gene}_${m.ref}${m.pos}${m.alt}`;
+        }).filter(Boolean));
+        filtered = RESULTS.filter(r => selectedLabels.has(r.label) || r.gene === "IS6110" || r.category === "gene_presence");
       }
       if (isHeuristic) {
         setResults(filtered.map(r => ({

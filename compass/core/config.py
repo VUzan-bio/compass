@@ -11,16 +11,36 @@ from pathlib import Path
 from typing import Optional
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ReferenceConfig(BaseModel):
     genome_fasta: Path
     genome_index: Optional[Path] = None
     human_index: Optional[Path] = None
+    # Cross-reactivity screening indices (closely related species).
+    # "ntm_indices" is the legacy name (NTM = non-tuberculous mycobacteria);
+    # "cross_reactivity_indices" is the organism-agnostic alias.
+    # Both fields feed into the same off-target screening databases.
     ntm_indices: list[Path] = Field(default_factory=list)
+    cross_reactivity_indices: list[Path] = Field(default_factory=list)
     gff_annotation: Optional[Path] = None
     genbank_annotation: Optional[Path] = None
+
+    @model_validator(mode="after")
+    def _merge_cross_reactivity(self) -> ReferenceConfig:
+        """Merge ntm_indices and cross_reactivity_indices into a single list."""
+        if self.cross_reactivity_indices:
+            all_indices = list(self.ntm_indices) + list(self.cross_reactivity_indices)
+            # Deduplicate while preserving order
+            seen = set()
+            merged = []
+            for p in all_indices:
+                if str(p) not in seen:
+                    seen.add(str(p))
+                    merged.append(p)
+            self.ntm_indices = merged
+        return self
 
 
 class CandidateConfig(BaseModel):
@@ -84,7 +104,16 @@ class MultiplexConfig(BaseModel):
     efficiency_weight: float = 0.5
     discrimination_weight: float = 0.2
     cross_reactivity_weight: float = 0.3
-    include_is6110: bool = True
+    include_species_control: bool = True
+    # Backwards-compat alias: include_is6110 maps to include_species_control
+    include_is6110: Optional[bool] = None
+
+    @model_validator(mode="after")
+    def _migrate_is6110_flag(self) -> MultiplexConfig:
+        """Map legacy include_is6110 → include_species_control."""
+        if self.include_is6110 is not None:
+            self.include_species_control = self.include_is6110
+        return self
 
 
 class PrimerConfig(BaseModel):

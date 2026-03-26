@@ -1,0 +1,63 @@
+# COMPASS — E. coli ESBL/Carbapenemase AMR Panel
+# Targets: ESBL genes (CTX-M), carbapenemases (NDM, KPC, OXA-48),
+#          colistin resistance (mcr-1), and fluoroquinolone QRDR mutations.
+# Reference: E. coli K-12 MG1655 (NC_000913.3)
+
+name: ecoli_esbl_panel
+output_dir: results/ecoli_esbl
+organism: ecoli
+
+reference:
+  genome_fasta: data/references/ecoli_K12.fasta
+  genome_index: data/references/ecoli_K12
+  human_index: null
+  gff_annotation: data/references/ecoli_K12.gff3
+  genbank_annotation: null
+
+candidates:
+  spacer_lengths: [18, 19, 20, 21, 22, 23]
+  use_enascas12a: true
+  cas_variant: enAsCas12a
+  require_seed_mutation: true
+  gc_min: 0.35
+  gc_max: 0.70
+  homopolymer_max: 4
+  mfe_threshold: -3.0
+
+synthetic_mismatch:
+  enabled: true
+  cas_variant: enAsCas12a
+  min_activity_vs_mut: 0.25
+  min_discrimination_improvement: 1.5
+  max_synthetic_mismatches: 2
+  allow_double_sm: true
+
+scoring:
+  use_heuristic: true
+  use_ml: false
+  use_discrimination: true
+  ml_model_name: heuristic
+  discrimination_min_ratio: 2.0
+  # ML scoring not yet validated for E. coli — use heuristic only
+  discrimination_method: heuristic
+
+multiplex:
+  max_plex: 14
+  optimizer: simulated_annealing
+  max_iterations: 10000
+  cross_reactivity_threshold: 0.3
+  efficiency_weight: 0.4
+  discrimination_weight: 0.3
+  cross_reactivity_weight: 0.3
+  include_species_control: true
+
+primers:
+  primer_length_min: 25
+  primer_length_max: 38
+  tm_min: 57.0
+  tm_max: 68.0
+  amplicon_min: 80
+  amplicon_max: 150
+  enable_allele_specific: true
+  as_rpa_deliberate_mm_pos: [-2, -3]
+  max_pairs_per_candidate: 10
