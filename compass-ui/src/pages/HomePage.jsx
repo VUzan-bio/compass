@@ -190,23 +190,28 @@ const HomePage = ({ goTo, connected }) => {
         if (data?.module_stats?.length) setPipeStats(data.module_stats);
       });
     } else {
+      const nMut = selected.size || orgMutations.length;
+      const org = activeOrganism;
+      const ref = org.reference || "reference";
+      const acc = org.accession || "";
+      const spCtrl = organism === "mtb" ? "IS6110" : organism === "ecoli" ? "uidA" : organism === "saureus" ? "nuc" : "porA";
       const m5Detail = scorer === "compass_ml"
         ? "241 candidates scored: Compass-ML activity (0.125–0.608) · Compass-ML discrimination (0.288–0.959) · PAM-adjusted (0.045–0.608)"
         : "241 candidates scored: Heuristic QC (0.125–0.608) · SeqCNN calibrated T=1.1 (0.288–0.959) · PAM-adjusted (0.045–0.608)";
       setPipeStats([
-        { module_id: "M1",   detail: "14 WHO catalogue mutations → genomic coordinates on H37Rv (NC_000962.3)", candidates_out: 14,  duration_ms: 1 },
+        { module_id: "M1",   detail: `${nMut} catalogue mutations → genomic coordinates on ${ref} (${acc})`,     candidates_out: nMut, duration_ms: 1 },
         { module_id: "M2",   detail: "34,364 positions scanned → 1,797 PAM sites → 334 candidates",             candidates_out: 334, duration_ms: 98 },
         { module_id: "M3",   detail: "334 → 241 (93 removed: GC, homopolymer, Tm)",                             candidates_out: 241, duration_ms: 8 },
-        { module_id: "M4",   detail: "241 → 222 (19 off-target hits, Bowtie2 ≤3 mismatches)",                   candidates_out: 222, duration_ms: 680 },
+        { module_id: "M4",   detail: `241 → 222 (19 off-target hits, Bowtie2 vs ${ref})`,                       candidates_out: 222, duration_ms: 680 },
         { module_id: "M5",   detail: m5Detail,                                                                   candidates_out: 241, duration_ms: 10300 },
         { module_id: "M5.5", detail: "241 MUT/WT spacer pairs generated (84 direct, 157 proximity)",             candidates_out: 241, duration_ms: 4 },
         { module_id: "M6",   detail: "84 candidates evaluated, 66 enhanced (seed positions 2–6)",                candidates_out: 66,  duration_ms: 72 },
         { module_id: "M6.5", detail: "241 → 84 above 2× threshold (84 diagnostic-grade ≥3×)",                   candidates_out: 84,  duration_ms: 59 },
-        { module_id: "M7",   detail: "241 → 14 selected (simulated annealing, 10,000 iterations)",               candidates_out: 14,  duration_ms: 2400 },
-        { module_id: "M8",   detail: "14/14 primer pairs designed (6 standard, 8 AS-RPA)",                       candidates_out: 14,  duration_ms: 2400 },
-        { module_id: "M8.5", detail: "AS-RPA disc: 8 scored | Dimer check: 78 flagged pairs",                    candidates_out: 14,  duration_ms: 234 },
-        { module_id: "M9",   detail: "14 candidates + IS6110 species control → final 15-channel panel",          candidates_out: 15,  duration_ms: 10 },
-        { module_id: "M10",  detail: "JSON + TSV + FASTA structured output",                                     candidates_out: 15,  duration_ms: 1 },
+        { module_id: "M7",   detail: `241 → ${nMut} selected (simulated annealing, 10,000 iterations)`,          candidates_out: nMut, duration_ms: 2400 },
+        { module_id: "M8",   detail: `${nMut}/${nMut} primer pairs designed (6 standard, ${nMut - 6} AS-RPA)`,   candidates_out: nMut, duration_ms: 2400 },
+        { module_id: "M8.5", detail: "AS-RPA disc: 8 scored | Dimer check: 78 flagged pairs",                    candidates_out: nMut, duration_ms: 234 },
+        { module_id: "M9",   detail: `${nMut} candidates + ${spCtrl} species control → final ${nMut + 1}-channel panel`, candidates_out: nMut + 1, duration_ms: 10 },
+        { module_id: "M10",  detail: "JSON + TSV + FASTA structured output",                                     candidates_out: nMut + 1, duration_ms: 1 },
       ]);
     }
   };
@@ -216,11 +221,25 @@ const HomePage = ({ goTo, connected }) => {
     return () => cleanupPipeline();
   }, []);
 
-  /* Scorer-aware modules; M5 adapts to selected scoring model */
-  const effectiveModules = useMemo(() => MODULES.map(m =>
-    m.id === "M5" && scorer === "compass_ml"
-      ? {
-          ...m,
+  /* Organism + scorer-aware module descriptions */
+  const SP_CTRL_MAP = { mtb: "IS6110", ecoli: "uidA", saureus: "nuc", ngonorrhoeae: "porA" };
+  const effectiveModules = useMemo(() => {
+    const org = activeOrganism;
+    const vars = {
+      "{REF}": org.reference || "reference",
+      "{ACC}": org.accession || "",
+      "{SIZE}": org.genome_length ? `${(org.genome_length / 1e6).toFixed(1)} Mb` : "genome",
+      "{ORG}": org.name,
+      "{GC_RANGE}": org.gc ? `${Math.max(20, (org.gc * 100 - 10)).toFixed(0)}–${Math.min(85, (org.gc * 100 + 25)).toFixed(0)}%` : "40–85%",
+      "{SP_CTRL}": SP_CTRL_MAP[org.id] || "species control",
+    };
+    const fill = (s) => Object.entries(vars).reduce((t, [k, v]) => t.replaceAll(k, v), s);
+
+    return MODULES.map(m => {
+      let mod = { ...m, desc: fill(m.desc), execDesc: fill(m.execDesc), substeps: (m.substeps || []).map(fill) };
+      if (m.id === "M5" && scorer === "compass_ml") {
+        mod = {
+          ...mod,
           name: "Compass-ML Scoring",
           execDesc: "Compass-ML (CNN + RNA-FM + RLPA) inference for efficiency and discrimination scoring",
           estSec: 180,
@@ -232,9 +251,11 @@ const HomePage = ({ goTo, connected }) => {
             "Applying R-loop propagation attention (RLPA, 34×34)",
             "Predicting efficiency + discrimination scores per candidate",
           ],
-        }
-      : m
-  ), [scorer]);
+        };
+      }
+      return mod;
+    });
+  }, [scorer, organism]);
 
   return (
     <div style={{ padding: mobile ? "24px 16px" : "32px 40px" }}>

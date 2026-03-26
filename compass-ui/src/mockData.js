@@ -194,9 +194,9 @@ const MOCK_CROSS_REACTIVITY = (() => {
 })();
 
 const MODULES = [
-  { id: "M1", name: "Target Resolution", desc: "WHO mutations → genomic coordinates", icon: Database, execDesc: "Resolving WHO-catalogued resistance mutations to genomic coordinates on H37Rv", estSec: 5, substeps: [
-    "Loading H37Rv reference genome (NC_000962.3, 4.4 Mb)",
-    "Parsing 5,959 genes from GFF3 annotation",
+  { id: "M1", name: "Target Resolution", desc: "AMR mutations → genomic coordinates", icon: Database, execDesc: "Resolving catalogued resistance mutations to genomic coordinates on {REF}", estSec: 5, substeps: [
+    "Loading {REF} reference genome ({ACC}, {SIZE})",
+    "Parsing genes from GFF3 annotation",
     "Resolving mutation coordinates to genomic positions",
     "Mapping drug resistance class associations",
   ]},
@@ -209,15 +209,15 @@ const MODULES = [
     "Collecting direct + proximity candidates per target",
   ]},
   { id: "M3", name: "Candidate Filtering", desc: "Biophysical constraints (GC, homopolymer, Tm)", icon: Filter, execDesc: "Applying biophysical filters: GC content, homopolymer runs, self-complementarity", estSec: 15, substeps: [
-    "Checking GC content (40–85% for M. tuberculosis)",
+    "Checking GC content ({GC_RANGE} for {ORG})",
     "Screening for homopolymer runs ≥4 nt",
     "Evaluating self-complementarity (MFE < −5.0 kcal/mol)",
     "Filtering seed region violations",
     "Compiling filter report per target",
   ]},
-  { id: "M4", name: "Off-Target Screening", desc: "Bowtie2 alignment + heuristic fallback", icon: Shield, execDesc: "Bowtie2 alignment against H37Rv genome, flagging off-target binding sites", estSec: 45, substeps: [
+  { id: "M4", name: "Off-Target Screening", desc: "Bowtie2 alignment + heuristic fallback", icon: Shield, execDesc: "Bowtie2 alignment against {REF} genome, flagging off-target binding sites", estSec: 45, substeps: [
     "Preparing spacer FASTA for Bowtie2 alignment",
-    "Aligning candidates against H37Rv genome",
+    "Aligning candidates against {REF} genome",
     "Scoring off-target binding sites (≤3 mismatches)",
     "Flagging high-risk off-target candidates",
     "Generating off-target summary report",
@@ -267,9 +267,9 @@ const MODULES = [
     "Running full primer dimer analysis across all oligos",
     "Scoring moderate and high-risk dimer interactions",
   ]},
-  { id: "M9", name: "Panel Assembly", desc: "MultiplexPanel + IS6110 control", icon: Package, execDesc: "Assembling final panel: crRNA sequences, primer pairs, amplicon maps, discrimination predictions", estSec: 5, substeps: [
+  { id: "M9", name: "Panel Assembly", desc: "MultiplexPanel + {SP_CTRL} control", icon: Package, execDesc: "Assembling final panel: crRNA sequences, primer pairs, amplicon maps, discrimination predictions", estSec: 5, substeps: [
     "Assembling MultiplexPanel structure",
-    "Designing IS6110 insertion element control primers",
+    "Designing {SP_CTRL} species identification control primers",
     "Computing panel sensitivity and specificity",
     "Collecting top-5 alternatives per target",
     "Generating full panel report (JSON + TSV)",
@@ -321,7 +321,7 @@ const SCORING_FEATURES = [
   { name: "GC Content", key: "gc", weight: 0.20, desc: "Optimal 40–60%. Extreme GC causes self-complementarity (high) or weak binding (low).", source: "Empirical" },
   { name: "Self-Complementarity", key: "structure", weight: 0.20, desc: "Spacer self-complementarity penalty. High self-complementarity blocks Cas12a loading.", source: "SantaLucia 1998" },
   { name: "Homopolymer", key: "homopolymer", weight: 0.10, desc: "≥4 consecutive identical nucleotides penalized (includes poly-T terminator risk).", source: "Heuristic" },
-  { name: "Off-Target", key: "offtarget", weight: 0.15, desc: "Bowtie2 alignment to H37Rv genome. Each hit with ≤3 mismatches reduces score.", source: "Langmead & Salzberg 2012" },
+  { name: "Off-Target", key: "offtarget", weight: 0.15, desc: "Bowtie2 alignment to reference genome. Each hit with ≤3 mismatches reduces score.", source: "Langmead & Salzberg 2012" },
 ];
 
 const DRUG_LABELS = {
@@ -372,13 +372,13 @@ const BIBLIOGRAPHY = [
 const ORGANISMS = [
   {
     id: "mtb", name: "M. tuberculosis", reference: "H37Rv",
-    accession: "NC_000962.3", gc: 0.656, priority: "WHO Critical",
+    accession: "NC_000962.3", gc: 0.656, genome_length: 4411532, priority: "WHO Critical",
     description: "Multi-drug resistant tuberculosis (MDR/XDR-TB)",
     mutations: MUTATIONS, // reuse existing MTB mutations
   },
   {
     id: "ecoli", name: "E. coli", reference: "K-12 MG1655",
-    accession: "NC_000913.3", gc: 0.508, priority: "WHO Critical",
+    accession: "NC_000913.3", gc: 0.508, genome_length: 4641652, priority: "WHO Critical",
     description: "ESBL-producing E. coli + Enterobacterales carbapenemase panel (NDM/KPC/OXA-48)",
     mutations: [
       // ESBLs — gene presence
@@ -404,7 +404,7 @@ const ORGANISMS = [
   },
   {
     id: "saureus", name: "S. aureus", reference: "NCTC 8325",
-    accession: "NC_007795.1", gc: 0.328, priority: "WHO Critical",
+    accession: "NC_007795.1", gc: 0.328, genome_length: 2821361, priority: "WHO Critical",
     description: "Methicillin-resistant S. aureus (MRSA) & vancomycin-resistant (VRSA)",
     mutations: [
       // Beta-lactam resistance — gene presence
@@ -433,7 +433,7 @@ const ORGANISMS = [
   },
   {
     id: "ngonorrhoeae", name: "N. gonorrhoeae", reference: "FA 1090",
-    accession: "NC_002946.2", gc: 0.525, priority: "WHO High",
+    accession: "NC_002946.2", gc: 0.525, genome_length: 2153922, priority: "WHO High",
     description: "Extended-spectrum cephalosporin & azithromycin-resistant gonorrhoea",
     mutations: [
       // Mosaic penA — ESC resistance (WHO urgent threat)
