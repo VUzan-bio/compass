@@ -96,7 +96,7 @@ def compute_evo2_llr_batch(
     model_name: str = "evo2_7b",
     window: int = 2,
 ) -> list[float]:
-    """Batch computation for all 14 MDR-TB targets.
+    """Batch computation for all AMR targets (loads model ONCE).
 
     Args:
         targets: list of dicts with keys:
@@ -107,13 +107,60 @@ def compute_evo2_llr_batch(
     Returns:
         List of LLR values, one per target.
     """
-    return [
-        compute_evo2_llr(
+    try:
+        from evo2 import Evo2
+    except ImportError:
+        raise ImportError(
+            "Evo 2 not installed. See: https://github.com/ARC-Institute/evo2"
+        )
+
+    # Load model ONCE for all targets (7B params, ~15GB GPU RAM)
+    model = Evo2(model_name)
+    model.model.eval()
+
+    results = []
+    for t in targets:
+        llr = _compute_llr_with_model(
+            model,
             t["mutant_context"],
             t["wildtype_context"],
             t["mutation_pos"],
             window=window,
-            model_name=model_name,
         )
-        for t in targets
-    ]
+        results.append(llr)
+
+    return results
+
+
+def _compute_llr_with_model(
+    model,
+    mutant_context: str,
+    wildtype_context: str,
+    mutation_pos: int,
+    window: int = 2,
+) -> float:
+    """Compute LLR using a pre-loaded EVO-2 model instance."""
+    with torch.no_grad():
+        mut_ids = torch.tensor(
+            model.tokenizer.tokenize(mutant_context), dtype=torch.long,
+        ).unsqueeze(0).to("cuda")
+        wt_ids = torch.tensor(
+            model.tokenizer.tokenize(wildtype_context), dtype=torch.long,
+        ).unsqueeze(0).to("cuda")
+
+        mut_logits, _ = model(mut_ids)
+        wt_logits, _ = model(wt_ids)
+
+    mut_logp = torch.nn.functional.log_softmax(mut_logits[0], dim=-1)
+    wt_logp = torch.nn.functional.log_softmax(wt_logits[0], dim=-1)
+
+    start = max(0, mutation_pos - window)
+    end = min(len(mutant_context) - 1, mutation_pos + window)
+
+    llr = 0.0
+    for i in range(start, end):
+        mut_token = mut_ids[0, i + 1]
+        wt_token = wt_ids[0, i + 1]
+        llr += mut_logp[i, mut_token].item() - wt_logp[i, wt_token].item()
+
+    return llr
