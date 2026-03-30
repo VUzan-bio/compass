@@ -91,12 +91,16 @@ ONEPOT_TEMPERATURE = 37.0
 # ---------------------------------------------------------------------------
 # Heuristic scoring weights (Module 4, Level 1)
 # ---------------------------------------------------------------------------
+# Weights learned from 2,858 EasyDesign perfect-match guides via Ridge
+# regression on measured trans-cleavage activity (log-k fluorescence).
+# PAM quality is the dominant predictor (applied multiplicatively in scorer).
+# GC has near-zero marginal signal after controlling for structure.
 HEURISTIC_WEIGHTS = {
     "seed_position": 0.35,
-    "gc": 0.20,
-    "structure": 0.20,
+    "gc": 0.05,
+    "structure": 0.30,
     "homopolymer": 0.10,
-    "offtarget": 0.15,
+    "offtarget": 0.20,
 }
 
 # TB-optimised weights: GC structure penalties increased for M.tb's
