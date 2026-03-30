@@ -1449,6 +1449,19 @@ const generateInterpretation = (r) => {
     lines.push(`Direct detection strategy. Discrimination ratio: ${disc.toFixed(1)}\u00D7 (${discSource}). WT spacer data unavailable for positional analysis.`);
   }
 
+  // ESM-2 evolutionary constraint annotation
+  const esm2Llr = r.discrimination?.feature_vector?.esm2_llr;
+  if (esm2Llr != null) {
+    const absLlr = Math.abs(esm2Llr);
+    if (absLlr < 1.0) {
+      lines.push(`Evolutionary constraint: LOW (ESM-2 |LLR|=${absLlr.toFixed(2)}). This is a conservative substitution that minimally disrupts protein structure \u2014 clinically prevalent but harder to discriminate because MUT and WT proteins are similar.`);
+    } else if (absLlr < 5.0) {
+      lines.push(`Evolutionary constraint: MODERATE (ESM-2 |LLR|=${absLlr.toFixed(2)}). The mutation causes moderate protein structural deviation from the evolutionary consensus.`);
+    } else {
+      lines.push(`Evolutionary constraint: HIGH (ESM-2 |LLR|=${absLlr.toFixed(2)}). This mutation severely disrupts protein structure \u2014 typically rare but produces a clear structural difference between MUT and WT, aiding discrimination.`);
+    }
+  }
+
   // Synthetic mismatch
   if (r.hasSM) {
     let smPos = r.smPosition || null;
@@ -2692,6 +2705,24 @@ const DiscriminationTab = ({ results, orgId = "mtb" }) => {
                       <span style={{ fontSize: "10px", fontWeight: 600, color: "#7c3aed" }}>Binary discrimination: SNP disrupts PAM</span>
                       <span style={{ fontSize: "10px", color: T.textTer }}>
                         {r.pamDisruptionType ? `(${r.pamDisruptionType}) ` : ""}The SNP converts a valid TTTV PAM to a non-functional sequence. Cas12a cannot initiate R-loop formation on WT, providing the strongest possible selectivity mechanism.
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+              )}
+              {/* ESM-2 evolutionary constraint row */}
+              {r.discFeatureVector?.esm2_abs_llr != null && (
+                <tr style={{ borderBottom: `1px solid ${T.borderLight}` }}>
+                  <td colSpan={9} style={{ padding: "6px 14px 6px 42px", background: r.discFeatureVector.esm2_abs_llr >= 5 ? "#05966908" : r.discFeatureVector.esm2_abs_llr < 1 ? "#ef444408" : "transparent" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span style={{ fontSize: "10px", fontWeight: 600, color: r.discFeatureVector.esm2_abs_llr >= 5 ? T.success : r.discFeatureVector.esm2_abs_llr < 1 ? T.danger : T.textSec }}>
+                        ESM-2 evolutionary constraint: {r.discFeatureVector.esm2_abs_llr >= 5 ? "HIGH" : r.discFeatureVector.esm2_abs_llr < 1 ? "LOW" : "MODERATE"}
+                      </span>
+                      <span style={{ fontSize: "10px", color: T.textTer, fontFamily: MONO }}>
+                        |LLR|={r.discFeatureVector.esm2_abs_llr.toFixed(2)}
+                      </span>
+                      <span style={{ fontSize: "9px", color: T.textTer }}>
+                        {r.discFeatureVector.esm2_abs_llr < 1 ? "Conservative substitution \u2014 prevalent but harder to discriminate" : r.discFeatureVector.esm2_abs_llr >= 5 ? "Costly mutation \u2014 rare but structurally distinct, aids discrimination" : "Moderate structural deviation from evolutionary consensus"}
                       </span>
                     </div>
                   </td>

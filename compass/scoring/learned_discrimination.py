@@ -54,6 +54,33 @@ from compass.scoring.discrimination import (
 
 logger = logging.getLogger(__name__)
 
+# Pre-computed ESM-2 protein log-likelihood ratios for AMR targets.
+# |LLR| correlates with fitness cost (MTB: rho=-0.706, p=0.023).
+# Low |LLR| = prevalent, conservative mutation = harder to discriminate.
+# High |LLR| = rare, costly mutation = easier to discriminate.
+_ESM2_LLR_LOOKUP: dict[str, float] = {}
+_ESM2_LLR_PATH = Path(__file__).resolve().parent.parent.parent / "results" / "research" / "esm2_llr" / "llr_results.csv"
+
+
+def _load_esm2_llr() -> dict[str, float]:
+    """Load ESM-2 LLR lookup table from pre-computed results."""
+    global _ESM2_LLR_LOOKUP
+    if _ESM2_LLR_LOOKUP:
+        return _ESM2_LLR_LOOKUP
+    if not _ESM2_LLR_PATH.exists():
+        return {}
+    try:
+        import csv
+        with open(_ESM2_LLR_PATH) as f:
+            for row in csv.DictReader(f):
+                if row.get("esm2_llr") and row["esm2_llr"] != "":
+                    _ESM2_LLR_LOOKUP[row["label"]] = float(row["esm2_llr"])
+        logger.info("Loaded ESM-2 LLR for %d targets", len(_ESM2_LLR_LOOKUP))
+    except Exception as e:
+        logger.debug("Could not load ESM-2 LLR: %s", e)
+    return _ESM2_LLR_LOOKUP
+
+
 # Ensure compass-net modules (features.thermodynamic, etc.) are importable.
 from compass.scoring._netpath import ensure_importable as _ensure_compass_net, _NET_DIR as _COMPASS_NET_DIR
 _ensure_compass_net()
@@ -110,6 +137,9 @@ class LearnedDiscriminationScorer(Scorer):
 
         self._model_path = Path(model_path)
         self._try_load_model()
+
+        # Load ESM-2 LLR lookup (lazy, no-op if file missing)
+        self._esm2_llr = _load_esm2_llr()
 
     def _try_load_model(self) -> bool:
         """Attempt to load the trained model."""
@@ -343,12 +373,11 @@ class LearnedDiscriminationScorer(Scorer):
                     d_rloop = ratio_xgb  # fallback: no blending
 
                 # Blend: geometric mean of learned and physics predictions.
-                # This anchors the learned model to the thermodynamic prior
-                # while letting it correct for protein-DNA effects the physics
-                # can't capture. Weight alpha controls the blend:
-                #   alpha=0.5 → equal trust in both
-                #   alpha=0.3 → lean towards XGBoost (more data-driven)
-                alpha = 0.35
+                # Physics prior validated (rho=0.23 standalone) but blend
+                # at alpha=0.35 reduces XGBoost performance (0.519 -> 0.488).
+                # CV-optimised alpha=0.03 on EasyDesign 7K paired data.
+                # Keep small alpha for soft regularisation without noise.
+                alpha = 0.05
                 import math
                 ratio = math.exp(
                     (1 - alpha) * math.log(max(ratio_xgb, 1e-6))
@@ -364,12 +393,27 @@ class LearnedDiscriminationScorer(Scorer):
                 base_conf = min(1.0, max(0.3, 1.0 - abs(delta_logk - 0.57) / 2.0))
                 confidence = 0.6 * base_conf + 0.4 * agreement
 
+                # ESM-2 evolutionary constraint modulation.
+                # |LLR| correlates with fitness cost (MTB: rho=-0.706, p=0.023).
+                # High |LLR| → costly mutation → structurally different → more
+                # confident that crRNA can discriminate MUT from WT.
+                esm2_llr = self._esm2_llr.get(candidate.target_label)
+                esm2_abs = None
+                if esm2_llr is not None:
+                    esm2_abs = abs(esm2_llr)
+                    # Sigmoid scaling: |LLR|=5 → +0.05 confidence, |LLR|=10 → +0.09
+                    evo_boost = 0.1 * (1.0 - math.exp(-esm2_abs / 5.0))
+                    confidence = min(1.0, confidence + evo_boost)
+
                 # Store features + physics values for diagnostics
                 feature_values = [features.get(n, 0.0) for n in feature_names]
                 feat_dict = dict(zip(feature_names, feature_values))
                 feat_dict["d_rloop"] = round(d_rloop, 2)
                 feat_dict["d_xgboost"] = round(ratio_xgb, 2)
                 feat_dict["d_blended"] = round(ratio, 2)
+                if esm2_abs is not None:
+                    feat_dict["esm2_llr"] = round(esm2_llr, 4)
+                    feat_dict["esm2_abs_llr"] = round(esm2_abs, 4)
 
                 return DiscriminationScore(
                     wt_activity=round(wt_activity, 4),

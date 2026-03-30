@@ -58,7 +58,7 @@ logger = logging.getLogger(__name__)
 
 RESULTS_DIR = Path("results/research/calibration")
 KIM2018_PATH = "compass/data/kim2018/nbt4061_source_data.xlsx"
-RNAFM_CACHE_DIR = "compass-net/cache/rnafm"
+RNAFM_CACHE_DIR = "compass/data/embeddings/rnafm"
 
 
 # ======================================================================
@@ -316,10 +316,10 @@ def get_model_predictions(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     ckpt = torch.load(checkpoint_path, map_location=device, weights_only=False)
 
-    # Infer model config from checkpoint
-    cfg = ckpt.get("config", {})
-    use_rnafm = cfg.get("use_rnafm", True) if isinstance(cfg, dict) else True
-    use_rlpa = cfg.get("use_rloop_attention", True) if isinstance(cfg, dict) else True
+    # Infer model config from checkpoint path (architecture in dir name)
+    ckpt_path_str = str(checkpoint_path).lower()
+    use_rnafm = "rnafm" in ckpt_path_str
+    use_rlpa = "rlpa" in ckpt_path_str
 
     model = CompassML(use_rnafm=use_rnafm, use_rloop_attention=use_rlpa)
     model.load_state_dict(ckpt["model_state_dict"])
@@ -519,7 +519,7 @@ def main():
         lines.append("Consider: larger validation set, Bayesian calibration, or ensemble methods.")
 
     report = "\n".join(lines)
-    with open(RESULTS_DIR / "calibration_report.md", "w") as f:
+    with open(RESULTS_DIR / "calibration_report.md", "w", encoding="utf-8") as f:
         f.write(report)
 
     logger.info("\n%s", report)

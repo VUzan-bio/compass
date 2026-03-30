@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
 
 RESULTS_DIR = Path("results/research/kim2018_benchmark")
 KIM2018_PATH = "compass/data/kim2018/nbt4061_source_data.xlsx"
-RNAFM_CACHE_DIR = "compass-net/cache/rnafm"
+RNAFM_CACHE_DIR = "compass/data/embeddings/rnafm"
 
 # Published baselines from literature (test on HT2+HT3 combined)
 LITERATURE_BASELINES = {
@@ -685,7 +685,7 @@ def main():
 
     # Save comparison table
     table = format_comparison_table(summary)
-    with open(RESULTS_DIR / "benchmark_table.md", "w") as f:
+    with open(RESULTS_DIR / "benchmark_table.md", "w", encoding="utf-8") as f:
         f.write(table)
 
     # Print summary

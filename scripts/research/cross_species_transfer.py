@@ -55,7 +55,7 @@ logger = logging.getLogger(__name__)
 RESULTS_DIR = Path("results/research/cross_species")
 KIM2018_PATH = "compass/data/kim2018/nbt4061_source_data.xlsx"
 EASYDESIGN_PATH = "compass-net/data/external/easydesign/Table_S2.xlsx"
-RNAFM_CACHE_DIR = "compass-net/cache/rnafm"
+RNAFM_CACHE_DIR = "compass/data/embeddings/rnafm"
 
 CONFIGS = {
     "baseline": {
@@ -759,7 +759,7 @@ def main():
         json.dump({"summary": summary, "all_runs": all_metrics}, f, indent=2)
 
     table = format_table(summary)
-    with open(RESULTS_DIR / "transfer_table.md", "w") as f:
+    with open(RESULTS_DIR / "transfer_table.md", "w", encoding="utf-8") as f:
         f.write(table)
 
     logger.info("\n%s", table)

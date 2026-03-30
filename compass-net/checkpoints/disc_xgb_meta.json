@@ -1,0 +1,29 @@
+{
+  "n_features": 18,
+  "feature_names": [
+    "spacer_position",
+    "in_seed",
+    "position_sensitivity",
+    "region_code",
+    "mismatch_destab",
+    "is_wobble",
+    "is_purine_purine",
+    "is_transition",
+    "mismatch_ddg",
+    "cumulative_dg_at_mm",
+    "seed_dg",
+    "total_hybrid_dg",
+    "energy_ratio",
+    "gc_content",
+    "local_gc",
+    "flank_at_rich",
+    "pam_to_mm_distance",
+    "upstream_gc"
+  ],
+  "backend": "xgboost",
+  "cv_rho_mean": 0.5522,
+  "cv_rho_std": 0.0101,
+  "trained_on": "easydesign_7k_paired",
+  "n_pairs": 7066,
+  "date": "2026-03-30T09:37:45.227911"
+}

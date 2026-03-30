@@ -55,7 +55,7 @@ def extract_contexts() -> list[dict]:
     Uses the TargetResolver to find the exact genomic position of each
     mutation, then extracts ±250bp flanking context.
     """
-    from compass.core.types import Drug, Mutation
+    from compass.core.types import Drug, Mutation, MutationCategory
     from compass.targets.resolver import TargetResolver
 
     # Load target metadata
@@ -88,8 +88,8 @@ def extract_contexts() -> list[dict]:
             genomes[org_id] = load_genome(fasta)
             if gff and gff.exists():
                 resolvers[org_id] = TargetResolver(
-                    genome_fasta=fasta,
-                    gff_path=gff,
+                    fasta=fasta,
+                    gff=gff,
                 )
             else:
                 logger.warning("GFF not found for %s, skipping", org_id)
@@ -109,20 +109,37 @@ def extract_contexts() -> list[dict]:
 
         # Build Mutation object
         drug_map = {
-            "RIF": Drug.RIF, "INH": Drug.INH, "EMB": Drug.EMB, "PZA": Drug.PZA,
-            "FQ": Drug.FQ, "AG": Drug.AG, "CIP": Drug.FQ, "AMP": Drug.OTHER,
-            "ESC": Drug.OTHER, "AZM": Drug.OTHER, "FUS": Drug.OTHER,
-            "TMP": Drug.OTHER, "DAP": Drug.OTHER, "SUL": Drug.OTHER,
+            "RIF": Drug.RIFAMPICIN, "INH": Drug.ISONIAZID, "EMB": Drug.ETHAMBUTOL,
+            "PZA": Drug.PYRAZINAMIDE, "FQ": Drug.FLUOROQUINOLONE,
+            "AG": Drug.AMINOGLYCOSIDE, "CIP": Drug.CIPROFLOXACIN,
+            "AMP": Drug.AMPICILLIN, "ESC": Drug.CEFTRIAXONE,
+            "AZM": Drug.AZITHROMYCIN, "FUS": Drug.OTHER,
+            "TMP": Drug.TRIMETHOPRIM_SULFAMETHOXAZOLE, "DAP": Drug.DAPTOMYCIN,
+            "SUL": Drug.TRIMETHOPRIM_SULFAMETHOXAZOLE, "CAR": Drug.CARBAPENEM,
         }
         drug = drug_map.get(t["drug_class"], Drug.OTHER)
 
         try:
+            # Determine mutation category
+            if alt_aa == "del":
+                category = MutationCategory.DELETION
+                alt_aa = "-"  # Pydantic expects max 3 chars
+            elif position < 0:
+                category = MutationCategory.PROMOTER
+            elif gene.startswith("rrs") or gene.startswith("23S"):
+                category = MutationCategory.RRNA
+            elif len(ref_aa) == 1 and ref_aa in "ACGT":
+                category = MutationCategory.NUCLEOTIDE_SNP
+            else:
+                category = MutationCategory.AA_SUBSTITUTION
+
             mutation = Mutation(
                 gene=gene,
                 ref_aa=ref_aa,
                 position=position,
                 alt_aa=alt_aa,
                 drug=drug,
+                category=category,
             )
             target = resolver.resolve(mutation)
         except Exception as e:

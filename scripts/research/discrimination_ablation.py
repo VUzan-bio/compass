@@ -105,51 +105,63 @@ def load_discrimination_data() -> dict:
     if not xlsx.exists():
         raise FileNotFoundError(f"EasyDesign data not found at {xlsx}")
 
-    # Load paired data sheet
     df = pd.read_excel(str(xlsx), sheet_name="Training data")
 
-    # Extract columns
+    # EasyDesign structure: each guide_seq has rows at different Hamming
+    # distances. dist=0 is perfect match (mutant target), dist=1+ is
+    # mismatch (wildtype-like). Discrimination = 10^(act_mut - act_wt)
+    # because activities are log-k scale.
     guides = []
     mm_positions = []
     mm_types = []
     disc_ratios = []
 
-    # Look for paired columns (mut/wt activity)
-    mut_col = None
-    wt_col = None
-    for c in df.columns:
-        cs = str(c).lower()
-        if "30 min" in cs or "activity" in cs:
-            if mut_col is None:
-                mut_col = c
-            else:
-                wt_col = c
+    # Group by guide, compute mean perfect-match activity per guide
+    grouped = df.groupby("guide_seq")
+    n_pairs = 0
 
-    if mut_col is None:
-        # Fallback: use guide-level data and simulate discrimination
-        logger.warning("Paired MUT/WT columns not found in EasyDesign.")
-        logger.info("Using guide activity as proxy (limitation noted).")
-        return _load_proxy_discrimination_data(df)
-
-    for _, row in df.iterrows():
-        guide = str(row.get("guide_seq", "")).upper()
+    for guide_seq, rows in grouped:
+        guide = str(guide_seq).upper()
         if len(guide) < 20:
             continue
 
-        mut_act = float(row[mut_col])
-        wt_act = float(row[wt_col]) if wt_col else mut_act * 0.5  # proxy
+        perfect = rows[rows["guide_target_hamming_dist"] == 0]
+        mismatched = rows[rows["guide_target_hamming_dist"] == 1]  # 1-mismatch only
 
-        if wt_act > 0:
-            ratio = mut_act / wt_act
-        else:
-            ratio = 10.0  # cap
+        if len(perfect) == 0 or len(mismatched) == 0:
+            continue
 
-        guides.append(guide)
-        mm_pos = int(row.get("mismatch_position", 10))
-        mm_type = str(row.get("mismatch_type", "rA:dC"))
-        mm_positions.append(mm_pos)
-        mm_types.append(mm_type)
-        disc_ratios.append(ratio)
+        # Mean log-k activity for perfect match
+        mut_logk = perfect["30 min"].mean()
+
+        # Each 1-mismatch row is a separate discrimination measurement
+        for _, mm_row in mismatched.iterrows():
+            wt_logk = mm_row["30 min"]
+            # Discrimination ratio in linear space: 10^(mut_logk - wt_logk)
+            # Higher = better discrimination (mutant signal >> wildtype)
+            delta_logk = mut_logk - wt_logk
+            ratio = 10 ** delta_logk
+
+            # Identify mismatch position by comparing guide vs target
+            target = str(mm_row.get("target_at_guide", "")).upper()
+            mm_pos = 10  # default
+            mm_type = "unknown"
+            if len(target) == len(guide):
+                for i in range(len(guide)):
+                    if guide[i] != target[i]:
+                        mm_pos = i
+                        mm_type = f"r{guide[i]}:d{target[i]}"
+                        break
+
+            guides.append(guide)
+            mm_positions.append(mm_pos)
+            mm_types.append(mm_type)
+            disc_ratios.append(ratio)
+            n_pairs += 1
+
+    logger.info("Built %d discrimination pairs from %d guides", n_pairs, len(grouped))
+    logger.info("  Ratio range: [%.3f, %.3f], median=%.3f",
+                min(disc_ratios), max(disc_ratios), np.median(disc_ratios))
 
     return {
         "guide_sequences": guides,
@@ -565,7 +577,7 @@ def main():
         lines.append(f"\nPhysics-only baseline: ρ={physics_rho:.3f} (non-trivial, validates R-loop model).")
 
     table = "\n".join(lines)
-    with open(RESULTS_DIR / "ablation_table.md", "w") as f:
+    with open(RESULTS_DIR / "ablation_table.md", "w", encoding="utf-8") as f:
         f.write(table)
 
     logger.info("\n%s", table)
