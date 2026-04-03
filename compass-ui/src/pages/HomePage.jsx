@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
-  ArrowLeft, ArrowRight, Brain, Check, CheckCircle, ChevronDown, ChevronRight,
-  Clock, Cpu, Crosshair, Database, Droplet, Filter, Layers, Loader2,
-  Play, Search, Settings, WifiOff, Zap,
+  Brain, Check, ChevronDown, Database, Droplet, Layers, Loader2, Play, Settings,
+  CheckCircle,
 } from "lucide-react";
 import { T, FONT, HEADING, MONO } from "../tokens";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -19,25 +18,10 @@ const DEFAULT_MUTS = [
   "rrs_A1401G", "eis_C-14T",
 ];
 
-/* ── Tier color mapping for panel card left borders ── */
-const TIER_COLORS = {
-  high: T.success,       // green - high confidence
-  mixed: T.warning,      // amber - mixed tiers
-  custom: T.textTer,     // gray
-};
-
-/* ── Step definitions ── */
-const STEPS = [
-  { label: "Organism & Panel", icon: Database },
-  { label: "Targets & Scoring", icon: Crosshair },
-  { label: "Review & Launch", icon: Play },
-];
-
 const HomePage = ({ goTo, connected }) => {
   const mobile = useIsMobile();
-  const [step, setStep] = useState(0);
   const [organism, setOrganism] = useState("mtb");
-  const [runName, setRunName] = useState("");
+  const [runName, setRunName] = useState("COMPASS_panel_" + new Date().toISOString().slice(0, 10).replace(/-/g, ""));
   const [mode, setMode] = useState("standard");
   const [selectedModules, setSelectedModules] = useState(new Set(MODULES.map(m => m.id)));
   const [configOpen, setConfigOpen] = useState(false);
@@ -46,7 +30,7 @@ const HomePage = ({ goTo, connected }) => {
   const [launching, setLaunching] = useState(false);
   const [error, setError] = useState(null);
 
-  // Active organism
+  // Active organism's mutation list
   const activeOrganism = ORGANISMS.find(o => o.id === organism) || ORGANISMS[0];
   const orgMutations = activeOrganism.mutations;
 
@@ -58,6 +42,7 @@ const HomePage = ({ goTo, connected }) => {
   const [pipeStats, setPipeStats] = useState([]);
   const [pipeElapsed, setPipeElapsed] = useState(0);
   const [showLog, setShowLog] = useState(false);
+  const [configCollapsed, setConfigCollapsed] = useState(false);
   const pipeStartRef = useRef(Date.now());
   const pipeStepStartRef = useRef(Date.now());
   const pipeTimerRef = useRef(null);
@@ -65,6 +50,7 @@ const HomePage = ({ goTo, connected }) => {
   const pipePollRef = useRef(null);
   const prevPipeStep = useRef(-1);
 
+  // Reset step timer whenever pipeStep changes
   useEffect(() => { pipeStepStartRef.current = Date.now(); }, [pipeStep]);
 
   /* ── Preset panel definitions ── */
@@ -79,25 +65,17 @@ const HomePage = ({ goTo, connected }) => {
   const [selected, setSelected] = useState(new Set());
   const [targetsOpen, setTargetsOpen] = useState(false);
 
-  /* ── Auto-generate run name from config ── */
-  const autoRunName = useMemo(() => {
-    const orgShort = organism === "mtb" ? "MTB" : organism === "ecoli" ? "ECOLI" : organism === "saureus" ? "SAUR" : "NGON";
-    const panelShort = panel === "mdr14" ? "MDR14" : panel === "mdr14_rnasep" ? "MDR14+RNP" : panel === "core5" ? "CORE5" : panel === "full" ? "FULL" : panel === "custom" ? `CUSTOM${selected.size}` : "NONE";
-    const scorerShort = scorer === "compass_ml" ? "ML" : scorer === "heuristic" ? "HEU" : "";
-    const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    return `COMPASS_${orgShort}_${panelShort}${scorerShort ? "_" + scorerShort : ""}_${date}`;
-  }, [organism, panel, scorer, selected.size]);
-
-  // Set run name when reaching review step
-  useEffect(() => {
-    if (step === 2 && !runName) setRunName(autoRunName);
-  }, [step, autoRunName]);
+  /* ── Expand states for click-to-reveal details ── */
+  const [expandedOrg, setExpandedOrg] = useState(null);
+  const [expandedPanel, setExpandedPanel] = useState(null);
+  const [expandedScorer, setExpandedScorer] = useState(null);
 
   const selectOrganism = (id) => {
     setOrganism(id);
     setPanel(null);
     setSelected(new Set());
     if (id !== "mtb" && scorer === "compass_ml") setScorer("heuristic");
+    setExpandedOrg(expandedOrg === id ? null : id);
   };
 
   const selectPanel = (p) => {
@@ -105,23 +83,15 @@ const HomePage = ({ goTo, connected }) => {
     if (p === "mdr14" || p === "mdr14_rnasep" || p === "full") { setSelected(new Set(ALL_INDICES)); setTargetsOpen(false); }
     else if (p === "core5") { setSelected(new Set(CORE5_INDICES)); setTargetsOpen(false); }
     else { setTargetsOpen(true); }
+    setExpandedPanel(expandedPanel === p ? null : p);
   };
 
   const toggleMut = (i) => { const n = new Set(selected); n.has(i) ? n.delete(i) : n.add(i); setSelected(n); };
   const selectedDrugs = [...new Set([...selected].map(i => orgMutations[i]?.drug).filter(Boolean))];
 
-  /* ── Recommended panel for organism ── */
-  const recommendedPanel = organism === "mtb" ? "mdr14" : "full";
-
-  /* ── Step validation ── */
-  const step0Valid = !!panel && selected.size > 0;
-  const step1Valid = !!scorer;
-  const canLaunch = step0Valid && step1Valid && selected.size > 0;
-
   const launch = async () => {
     setLaunching(true);
     setError(null);
-    const effectiveName = runName || autoRunName;
     const muts = [...selected].map(i => {
       const m = orgMutations[i];
       return m.category === "gene_presence"
@@ -131,7 +101,7 @@ const HomePage = ({ goTo, connected }) => {
     const apiMode = "full";
     const overrides = { ...(scorer !== "heuristic" ? { scorer } : {}), organism };
     if (connected) {
-      const { data, error: err } = await submitRun(effectiveName, apiMode, muts, overrides, enzymeId);
+      const { data, error: err } = await submitRun(runName, apiMode, muts, overrides, enzymeId);
       if (err) { setError(err); setLaunching(false); return; }
       startInlinePipeline(data.job_id);
     } else {
@@ -158,7 +128,7 @@ const HomePage = ({ goTo, connected }) => {
     pipeStartRef.current = Date.now();
     pipeStepStartRef.current = Date.now();
     setLaunching(false);
-    setStep(3); // Move to pipeline view
+    setConfigCollapsed(true);
 
     pipeTimerRef.current = setInterval(() => {
       setPipeElapsed((Date.now() - pipeStartRef.current) / 1000);
@@ -213,26 +183,27 @@ const HomePage = ({ goTo, connected }) => {
       const acc = org.accession || "";
       const spCtrl = organism === "mtb" ? "IS6110" : organism === "ecoli" ? "uidA" : organism === "saureus" ? "nuc" : "porA";
       const m5Detail = scorer === "compass_ml"
-        ? "241 candidates scored: Compass-ML activity (0.125\u20130.608) \u00b7 Compass-ML discrimination (0.288\u20130.959) \u00b7 PAM-adjusted (0.045\u20130.608)"
-        : "241 candidates scored: Heuristic QC (0.125\u20130.608) \u00b7 SeqCNN calibrated T=1.1 (0.288\u20130.959) \u00b7 PAM-adjusted (0.045\u20130.608)";
+        ? "241 candidates scored: Compass-ML activity (0.125–0.608) · Compass-ML discrimination (0.288–0.959) · PAM-adjusted (0.045–0.608)"
+        : "241 candidates scored: Heuristic QC (0.125–0.608) · SeqCNN calibrated T=1.1 (0.288–0.959) · PAM-adjusted (0.045–0.608)";
       setPipeStats([
-        { module_id: "M1",   detail: `${nMut} catalogue mutations \u2192 genomic coordinates on ${ref} (${acc})`,     candidates_out: nMut, duration_ms: 1 },
-        { module_id: "M2",   detail: "34,364 positions scanned \u2192 1,797 PAM sites \u2192 334 candidates",             candidates_out: 334, duration_ms: 98 },
-        { module_id: "M3",   detail: "334 \u2192 241 (93 removed: GC, homopolymer, Tm)",                             candidates_out: 241, duration_ms: 8 },
-        { module_id: "M4",   detail: `241 \u2192 222 (19 off-target hits, Bowtie2 vs ${ref})`,                       candidates_out: 222, duration_ms: 680 },
+        { module_id: "M1",   detail: `${nMut} catalogue mutations → genomic coordinates on ${ref} (${acc})`,     candidates_out: nMut, duration_ms: 1 },
+        { module_id: "M2",   detail: "34,364 positions scanned → 1,797 PAM sites → 334 candidates",             candidates_out: 334, duration_ms: 98 },
+        { module_id: "M3",   detail: "334 → 241 (93 removed: GC, homopolymer, Tm)",                             candidates_out: 241, duration_ms: 8 },
+        { module_id: "M4",   detail: `241 → 222 (19 off-target hits, Bowtie2 vs ${ref})`,                       candidates_out: 222, duration_ms: 680 },
         { module_id: "M5",   detail: m5Detail,                                                                   candidates_out: 241, duration_ms: 10300 },
         { module_id: "M5.5", detail: "241 MUT/WT spacer pairs generated (84 direct, 157 proximity)",             candidates_out: 241, duration_ms: 4 },
-        { module_id: "M6",   detail: "84 candidates evaluated, 66 enhanced (seed positions 2\u20136)",                candidates_out: 66,  duration_ms: 72 },
-        { module_id: "M6.5", detail: "241 \u2192 84 above 2\u00d7 threshold (84 diagnostic-grade \u22653\u00d7)",                   candidates_out: 84,  duration_ms: 59 },
-        { module_id: "M7",   detail: `241 \u2192 ${nMut} selected (simulated annealing, 10,000 iterations)`,          candidates_out: nMut, duration_ms: 2400 },
+        { module_id: "M6",   detail: "84 candidates evaluated, 66 enhanced (seed positions 2–6)",                candidates_out: 66,  duration_ms: 72 },
+        { module_id: "M6.5", detail: "241 → 84 above 2× threshold (84 diagnostic-grade ≥3×)",                   candidates_out: 84,  duration_ms: 59 },
+        { module_id: "M7",   detail: `241 → ${nMut} selected (simulated annealing, 10,000 iterations)`,          candidates_out: nMut, duration_ms: 2400 },
         { module_id: "M8",   detail: `${nMut}/${nMut} primer pairs designed (6 standard, ${nMut - 6} AS-RPA)`,   candidates_out: nMut, duration_ms: 2400 },
         { module_id: "M8.5", detail: "AS-RPA disc: 8 scored | Dimer check: 78 flagged pairs",                    candidates_out: nMut, duration_ms: 234 },
-        { module_id: "M9",   detail: `${nMut} candidates + ${spCtrl} species control \u2192 final ${nMut + 1}-channel panel`, candidates_out: nMut + 1, duration_ms: 10 },
+        { module_id: "M9",   detail: `${nMut} candidates + ${spCtrl} species control → final ${nMut + 1}-channel panel`, candidates_out: nMut + 1, duration_ms: 10 },
         { module_id: "M10",  detail: "JSON + TSV + FASTA structured output",                                     candidates_out: nMut + 1, duration_ms: 1 },
       ]);
     }
   };
 
+  // Cleanup on unmount
   useEffect(() => { return () => cleanupPipeline(); }, []);
 
   /* Organism + scorer-aware module descriptions */
@@ -244,7 +215,7 @@ const HomePage = ({ goTo, connected }) => {
       "{ACC}": org.accession || "",
       "{SIZE}": org.genome_length ? `${(org.genome_length / 1e6).toFixed(1)} Mb` : "genome",
       "{ORG}": org.name,
-      "{GC_RANGE}": org.gc ? `${Math.max(20, (org.gc * 100 - 10)).toFixed(0)}\u2013${Math.min(85, (org.gc * 100 + 25)).toFixed(0)}%` : "40\u201385%",
+      "{GC_RANGE}": org.gc ? `${Math.max(20, (org.gc * 100 - 10)).toFixed(0)}–${Math.min(85, (org.gc * 100 + 25)).toFixed(0)}%` : "40–85%",
       "{SP_CTRL}": SP_CTRL_MAP[org.id] || "species control",
     };
     const fill = (s) => Object.entries(vars).reduce((t, [k, v]) => t.replaceAll(k, v), s);
@@ -263,7 +234,7 @@ const HomePage = ({ goTo, connected }) => {
               "Downloading RNA-FM weights from HuggingFace (~1.1 GB)",
               "Computing RNA-FM embeddings (640-dim, frozen) per candidate",
               "Running multi-scale CNN branch (kernels 3/5/7)",
-              "Applying R-loop propagation attention (RLPA, 34\u00d734)",
+              "Applying R-loop propagation attention (RLPA, 34×34)",
               "Predicting efficiency + discrimination scores per candidate",
             ],
           };
@@ -287,366 +258,301 @@ const HomePage = ({ goTo, connected }) => {
     });
   }, [scorer, organism]);
 
-  /* ── Panel card definitions (organism-aware) ── */
+  /* ── Panel card data (organism-aware) ── */
   const panelCards = useMemo(() => {
     const cards = [];
     if (organism === "mtb") {
       cards.push(
-        { id: "mdr14", name: "MDR-TB 14-plex", targets: ALL_INDICES.length + " targets",
+        { id: "mdr14", name: "MDR-TB 14-plex", targets: ALL_INDICES.length,
           desc: "Full WHO-catalogued first- and second-line resistance panel.",
-          meta: ["6 drug classes", "Tier 1\u20132", "High + Moderate"], tierColor: TIER_COLORS.mixed, recommended: true },
-        { id: "mdr14_rnasep", name: "MDR-TB 14-plex + RNaseP", targets: (ALL_INDICES.length + 1) + " targets",
+          meta: ["6 drug classes", "Tier 1–2", "High + Moderate"], recommended: true },
+        { id: "mdr14_rnasep", name: "MDR-TB 14-plex + RNaseP", targets: ALL_INDICES.length + 1,
           desc: "Full MDR panel plus human RNaseP (RPPH1) extraction control.",
-          meta: ["6 drug classes", "+ extraction ctrl", "CDC standard"], tierColor: TIER_COLORS.mixed, recommended: false },
+          meta: ["6 drug classes", "+ extraction ctrl", "CDC standard"], recommended: false },
       );
     } else {
       cards.push(
-        { id: "full", name: `Full ${activeOrganism.name} panel`, targets: ALL_INDICES.length + " targets",
+        { id: "full", name: `Full ${activeOrganism.name} panel`, targets: ALL_INDICES.length,
           desc: `All catalogued AMR targets for ${activeOrganism.name}.`,
-          meta: [[...new Set(orgMutations.map(m => m.drug))].length + " drug classes", "All tiers"], tierColor: TIER_COLORS.mixed, recommended: true },
+          meta: [[...new Set(orgMutations.map(m => m.drug))].length + " drug classes", "All tiers"], recommended: true },
       );
     }
     cards.push(
-      { id: "core5", name: "Core 5-plex", targets: CORE5_INDICES.length + " targets",
+      { id: "core5", name: "Core 5-plex", targets: CORE5_INDICES.length,
         desc: "High-confidence tier-1 mutations only. Point-of-care screening.",
-        meta: [[...new Set(CORE5_INDICES.map(i => orgMutations[i]?.drug))].length + " drug classes", "Tier 1", "High confidence"], tierColor: TIER_COLORS.high, recommended: false },
-      { id: "custom", name: "Custom Panel", targets: panel === "custom" ? selected.size + " targets" : "",
+        meta: [[...new Set(CORE5_INDICES.map(i => orgMutations[i]?.drug))].length + " drug classes", "Tier 1", "High confidence"], recommended: false },
+      { id: "custom", name: "Custom Panel", targets: panel === "custom" ? selected.size : null,
         desc: "Select individual mutations for targeted re-design or validation.",
-        meta: [], tierColor: TIER_COLORS.custom, recommended: false },
+        meta: [], recommended: false },
     );
     return cards;
   }, [organism, panel, selected.size, orgMutations]);
 
-  /* ══════════════════════════════════════════════════════════════════
-     STEPPER HEADER
-     ══════════════════════════════════════════════════════════════════ */
-  const StepperHeader = () => (
-    <div style={{ display: "flex", alignItems: "center", gap: "0", marginBottom: "32px" }}>
-      {STEPS.map((s, i) => {
-        const done = i < step || (step === 3);
-        const active = i === step;
-        const StepIcon = s.icon;
-        return (
-          <React.Fragment key={i}>
-            {i > 0 && (
-              <div style={{
-                flex: 1, height: "2px", maxWidth: "120px",
-                background: done ? T.primary : active ? `linear-gradient(90deg, ${T.primary}, ${T.border})` : T.border,
-                margin: "0 4px", borderRadius: "1px",
-              }} />
-            )}
-            <button
-              onClick={() => { if (done && step !== 3) setStep(i); }}
-              disabled={step === 3}
-              style={{
-                display: "flex", alignItems: "center", gap: "8px", padding: "8px 16px",
-                borderRadius: "8px", border: "none", cursor: done && step !== 3 ? "pointer" : active ? "default" : "default",
-                background: active ? T.primaryLight : done ? T.successLight : "transparent",
-                transition: "all 0.2s",
-              }}
-            >
-              <div style={{
-                width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
-                background: done ? T.success : active ? T.primary : T.bgHover,
-                color: done || active ? "#fff" : T.textTer,
-                fontSize: "12px", fontWeight: 700, fontFamily: MONO,
-                transition: "all 0.2s",
-              }}>
-                {done ? <Check size={14} strokeWidth={3} /> : i + 1}
-              </div>
-              {!mobile && (
-                <span style={{
-                  fontSize: "13px", fontWeight: active ? 600 : 500, fontFamily: HEADING,
-                  color: active ? T.primaryDark : done ? T.success : T.textTer,
-                }}>{s.label}</span>
-              )}
+  /* ── Shared card style ── */
+  const card = (isSelected) => ({
+    padding: "14px 18px", borderRadius: "10px", cursor: "pointer",
+    border: isSelected ? `1.5px solid ${T.primary}` : `1px solid ${T.border}`,
+    background: isSelected ? T.primaryLight : T.bg,
+    transition: "all 0.15s ease",
+    boxShadow: isSelected ? `0 0 0 1px ${T.primary}20` : "none",
+  });
+
+  return (
+    <div style={{ padding: mobile ? "24px 16px" : "32px 40px" }}>
+      {/* Page title */}
+      <div style={{ marginBottom: "24px" }}>
+        <h1 style={{ fontSize: "20px", fontWeight: 600, color: T.text, margin: 0, fontFamily: HEADING, letterSpacing: "-0.01em" }}>Pipeline Configuration</h1>
+      </div>
+
+      {/* ── MAIN CONFIG AREA ── */}
+      <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: "4px", marginBottom: "24px", overflow: "hidden" }}>
+
+        {/* Collapsed header when pipeline is running */}
+        {configCollapsed && pipeJobId && (
+          <button onClick={() => setConfigCollapsed(!configCollapsed)} style={{
+            width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "14px 24px", background: T.bgSub, border: "none", cursor: "pointer", fontFamily: FONT,
+          }}>
+            <div style={{ display: "flex", gap: "12px", alignItems: "center", fontSize: "13px" }}>
+              <span style={{ fontWeight: 600, color: T.text }}>Pipeline Configuration</span>
+              <span style={{ color: T.textSec, fontSize: "11px" }}>
+                {activeOrganism.name} · {panel === "mdr14" ? "MDR-TB 14-plex" : panel === "mdr14_rnasep" ? "MDR-TB + RNaseP" : panel === "full" ? "Full panel" : panel === "core5" ? "Core 5-plex" : "Custom"} · {scorer === "compass_ml" ? "Compass-ML" : scorer === "heuristic" ? "Heuristic" : ""} · {selected.size} targets
+              </span>
+            </div>
+            <ChevronDown size={14} color={T.textSec} style={{ transform: "rotate(0deg)", transition: "0.2s" }} />
+          </button>
+        )}
+
+        <div style={{ padding: mobile ? "20px" : "32px", display: configCollapsed && pipeJobId ? "none" : "block" }}>
+
+        {/* Expand/collapse toggle when pipeline running */}
+        {pipeJobId && !configCollapsed && (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "12px" }}>
+            <button onClick={() => setConfigCollapsed(true)} style={{
+              fontSize: "11px", color: T.textSec, background: "none", border: "none", cursor: "pointer", fontFamily: FONT,
+              display: "flex", alignItems: "center", gap: "4px",
+            }}>
+              Collapse <ChevronDown size={12} color={T.textSec} style={{ transform: "rotate(180deg)" }} />
             </button>
-          </React.Fragment>
-        );
-      })}
-    </div>
-  );
+          </div>
+        )}
 
-  /* ══════════════════════════════════════════════════════════════════
-     STEP 0: Organism + Panel
-     ══════════════════════════════════════════════════════════════════ */
-  const Step0 = () => (
-    <div style={{ animation: "fadeIn 0.2s ease-out" }}>
-      {/* Organism selection */}
-      <div style={{ marginBottom: "28px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
-          <Database size={16} color={T.primary} />
-          <h2 style={{ fontSize: "15px", fontWeight: 600, color: T.text, margin: 0, fontFamily: HEADING }}>Target Organism</h2>
+        {/* 1. Run Name; compact inline */}
+        <div style={{ marginBottom: "24px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <label style={{ fontSize: "13px", fontWeight: 600, color: T.text, fontFamily: HEADING, flexShrink: 0 }}>Run Name</label>
+            <input value={runName} onChange={(e) => setRunName(e.target.value)}
+              style={{ flex: 1, padding: "10px 14px", border: `1px solid ${T.border}`, borderRadius: "4px", fontSize: "13px", fontFamily: MONO, color: T.text, background: T.bgSub, outline: "none", boxSizing: "border-box" }}
+              placeholder="e.g. MDR-TB_14plex_v2"
+            />
+          </div>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr", gap: "10px" }}>
-          {ORGANISMS.map(org => (
-            <div key={org.id} onClick={() => selectOrganism(org.id)} style={{
-              padding: "16px 20px", borderRadius: "6px", cursor: "pointer",
-              border: organism === org.id ? `2px solid ${T.primary}` : `1px solid ${T.border}`,
-              background: organism === org.id ? T.primaryLight : T.bg,
-              display: "flex", flexDirection: "column", transition: "all 0.15s",
-            }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                <span style={{ fontSize: "14px", fontWeight: 600, color: T.text, fontFamily: HEADING }}>{org.name}</span>
-                <span style={{ fontSize: "11px", fontWeight: 500, fontFamily: MONO, color: organism === org.id ? T.primary : T.textTer }}>{org.mutations.length} targets</span>
-              </div>
-              <div style={{ fontSize: "12px", color: T.textSec, lineHeight: 1.5, marginBottom: "6px" }}>{org.description}</div>
-              <div style={{ display: "flex", gap: "12px", fontSize: "11px", color: T.textTer, borderTop: `1px solid ${organism === org.id ? T.primary + "30" : T.borderLight}`, paddingTop: "6px" }}>
-                <span>{org.reference}</span>
-                <span>GC {(org.gc * 100).toFixed(1)}%</span>
-                <span>{org.priority}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
 
-      {/* Panel selection */}
-      <div style={{ marginBottom: "16px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
-          <Layers size={16} color={T.primary} />
-          <h2 style={{ fontSize: "15px", fontWeight: 600, color: T.text, margin: 0, fontFamily: HEADING }}>Diagnostic Panel</h2>
-          {!panel && <span style={{ fontSize: "11px", color: T.warning, fontWeight: 500 }}>Select a panel to continue</span>}
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr", gap: "10px" }}>
-          {panelCards.map(p => (
-            <div key={p.id} onClick={() => selectPanel(p.id)} style={{
-              padding: "16px 20px", borderRadius: "6px", cursor: "pointer",
-              border: panel === p.id ? `2px solid ${T.primary}` : `1px solid ${T.border}`,
-              background: panel === p.id ? T.primaryLight : T.bg,
-              borderLeft: `4px solid ${panel === p.id ? T.primary : p.tierColor}`,
-              display: "flex", flexDirection: "column", transition: "all 0.15s",
-              position: "relative",
-            }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                <span style={{ fontSize: "14px", fontWeight: 600, color: T.text, fontFamily: HEADING }}>{p.name}</span>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  {p.recommended && (
-                    <span style={{
-                      fontSize: "10px", fontWeight: 600, fontFamily: MONO, padding: "2px 8px", borderRadius: "3px",
-                      background: T.primaryLight, color: T.primary,
-                    }}>Recommended</span>
+        <div style={{ height: 1, background: T.borderLight, margin: "0 0 28px" }} />
+
+        {/* ═══ BLOCK 1: Target Organism ═══ */}
+        <div style={{ marginBottom: "28px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
+            <Database size={15} color={T.textSec} />
+            <span style={{ fontSize: "13px", fontWeight: 600, color: T.text, fontFamily: HEADING }}>Target Organism</span>
+            <span style={{ fontSize: "11px", color: T.primary, fontWeight: 600, marginLeft: "auto" }}>{activeOrganism.name}</span>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr", gap: "10px" }}>
+            {ORGANISMS.map(org => {
+              const sel = organism === org.id;
+              const exp = expandedOrg === org.id && sel;
+              return (
+                <div key={org.id} onClick={() => selectOrganism(org.id)} style={{
+                  ...card(sel), display: "flex", flexDirection: "column",
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: "14px", fontWeight: 600, color: T.text, fontFamily: HEADING }}>{org.name}</span>
+                    <span style={{ fontSize: "11px", fontWeight: 500, fontFamily: MONO, color: sel ? T.primary : T.textTer }}>{org.mutations.length} targets</span>
+                  </div>
+                  {/* Expanded details on click */}
+                  {exp && (
+                    <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: `1px solid ${sel ? T.primary + "25" : T.borderLight}`, animation: "fadeIn 0.15s ease-out" }}>
+                      <div style={{ fontSize: "12px", color: T.textSec, lineHeight: 1.6, marginBottom: "8px" }}>{org.description}</div>
+                      <div style={{ display: "flex", gap: "16px", fontSize: "11px", color: T.textTer }}>
+                        <span>{org.reference}</span>
+                        <span>GC {(org.gc * 100).toFixed(1)}%</span>
+                        <span>{org.priority}</span>
+                      </div>
+                    </div>
                   )}
-                  {p.targets && <span style={{ fontSize: "13px", fontWeight: 500, fontFamily: MONO, color: panel === p.id ? T.primary : T.textTer }}>{p.targets}</span>}
                 </div>
-              </div>
-              <div style={{ fontSize: "13px", color: T.textSec, lineHeight: 1.5, flex: 1, marginBottom: p.meta.length ? "8px" : "0" }}>{p.desc}</div>
-              {p.meta.length > 0 && (
-                <div style={{ display: "flex", gap: "12px", fontSize: "12px", color: T.textTer, borderTop: `1px solid ${panel === p.id ? T.primary + "30" : T.borderLight}`, paddingTop: "8px" }}>
-                  {p.meta.map((label, j) => <span key={j}>{label}</span>)}
-                </div>
-              )}
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ═══ BLOCK 2: Panel + Scoring side by side ═══ */}
+        <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr", gap: "24px", marginBottom: "16px" }}>
+
+          {/* ── Left: Diagnostic Panel ── */}
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
+              <Layers size={15} color={T.textSec} />
+              <span style={{ fontSize: "13px", fontWeight: 600, color: T.text, fontFamily: HEADING }}>Diagnostic Panel</span>
             </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Show selected mutations summary when a non-custom panel is chosen */}
-      {panel && panel !== "custom" && selected.size > 0 && (
-        <div style={{
-          marginTop: "16px", padding: "14px 18px", borderRadius: "6px",
-          background: T.successLight, border: `1px solid ${T.success}30`,
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-            <Check size={14} color={T.success} strokeWidth={2.5} />
-            <span style={{ fontSize: "13px", fontWeight: 600, color: T.text }}>{selected.size} targets selected</span>
-          </div>
-          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-            {selectedDrugs.map(d => <DrugBadge key={d} drug={d} />)}
-          </div>
-        </div>
-      )}
-
-      {/* Navigation */}
-      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "28px", paddingTop: "20px", borderTop: `1px solid ${T.borderLight}` }}>
-        <Btn icon={ArrowRight} onClick={() => setStep(1)} disabled={!step0Valid}>
-          Next: Targets & Scoring
-        </Btn>
-      </div>
-    </div>
-  );
-
-  /* ══════════════════════════════════════════════════════════════════
-     STEP 1: Targets review + Scoring model
-     ══════════════════════════════════════════════════════════════════ */
-  const Step1 = () => (
-    <div style={{ animation: "fadeIn 0.2s ease-out" }}>
-      {/* Mutation targets */}
-      <div style={{ marginBottom: "28px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
-          <Crosshair size={16} color={T.primary} />
-          <h2 style={{ fontSize: "15px", fontWeight: 600, color: T.text, margin: 0, fontFamily: HEADING }}>
-            {panel === "custom" ? "Select Mutation Targets" : "Mutation Targets"}
-          </h2>
-          <span style={{ fontSize: "12px", color: T.textSec, fontFamily: MONO }}>{selected.size} selected</span>
-        </div>
-
-        <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: "6px", overflow: "hidden" }}>
-          {/* Drug filter chips for custom panel */}
-          {panel === "custom" && (
-            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", padding: "12px 16px", borderBottom: `1px solid ${T.borderLight}` }}>
-              <button onClick={() => setSelected(new Set(ALL_INDICES))} style={{ padding: "5px 12px", borderRadius: "4px", border: `1px solid ${T.border}`, background: selected.size === orgMutations.length ? T.primary : T.bg, color: selected.size === orgMutations.length ? "#fff" : T.textSec, fontSize: "11px", fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>All ({orgMutations.length})</button>
-              <button onClick={() => setSelected(new Set())} style={{ padding: "5px 12px", borderRadius: "4px", border: `1px solid ${T.border}`, background: selected.size === 0 ? T.bgSub : T.bg, color: T.textSec, fontSize: "11px", fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>None</button>
-              <div style={{ width: 1, background: T.border, margin: "0 4px" }} />
-              {[...new Set(orgMutations.map(m => m.drug))].map(drug => {
-                const indices = orgMutations.map((m, i) => m.drug === drug ? i : -1).filter(i => i >= 0);
-                const allSel = indices.every(i => selected.has(i));
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {panelCards.map(p => {
+                const sel = panel === p.id;
+                const exp = expandedPanel === p.id && sel;
                 return (
-                  <button key={drug} onClick={() => {
-                    const n = new Set(selected);
-                    indices.forEach(i => allSel ? n.delete(i) : n.add(i));
-                    setSelected(n);
-                  }} style={{ padding: "5px 12px", borderRadius: "4px", border: `1px solid ${allSel ? T.primary : T.border}`, background: allSel ? T.primaryLight : T.bg, color: allSel ? T.primary : T.textSec, fontSize: "11px", fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>
-                    {drug} ({indices.length})
+                  <div key={p.id} onClick={() => selectPanel(p.id)} style={{
+                    ...card(sel), position: "relative",
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span style={{ fontSize: "13px", fontWeight: 600, color: T.text, fontFamily: HEADING }}>{p.name}</span>
+                        {p.recommended && (
+                          <span style={{ fontSize: "9px", fontWeight: 600, fontFamily: MONO, padding: "2px 6px", borderRadius: "3px", background: T.primaryLight, color: T.primary }}>Recommended</span>
+                        )}
+                      </div>
+                      {p.targets != null && <span style={{ fontSize: "11px", fontWeight: 500, fontFamily: MONO, color: sel ? T.primary : T.textTer }}>{p.targets} targets</span>}
+                    </div>
+                    {/* Expanded details */}
+                    {exp && (
+                      <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: `1px solid ${sel ? T.primary + "25" : T.borderLight}`, animation: "fadeIn 0.15s ease-out" }}>
+                        <div style={{ fontSize: "12px", color: T.textSec, lineHeight: 1.6, marginBottom: p.meta.length ? "8px" : 0 }}>{p.desc}</div>
+                        {p.meta.length > 0 && (
+                          <div style={{ display: "flex", gap: "12px", fontSize: "11px", color: T.textTer, flexWrap: "wrap" }}>
+                            {p.meta.map((label, j) => <span key={j}>{label}</span>)}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ── Right: Scoring Model ── */}
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
+              <Brain size={15} color={T.textSec} />
+              <span style={{ fontSize: "13px", fontWeight: 600, color: T.text, fontFamily: HEADING }}>Scoring Model</span>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {[
+                { id: "heuristic", label: "Heuristic", desc: "Position-weighted composite across 5 biophysical features. Organism-aware weights.", tag: "Baseline", available: true },
+                { id: "compass_ml", label: "Compass-ML", desc: organism === "mtb" ? "Dual-branch CNN & RNA-FM with R-loop propagation attention." : `Trained on M. tuberculosis only. Not yet available for ${activeOrganism.name}. Falls back to heuristic.`, tag: organism === "mtb" ? "Recommended" : "MTB only", available: organism === "mtb" },
+              ].map(s => {
+                const disabled = !s.available;
+                const sel = scorer === s.id;
+                const exp = expandedScorer === s.id && sel;
+                return (
+                  <button key={s.id} onClick={() => {
+                    if (!disabled) setScorer(s.id); else setScorer("heuristic");
+                    setExpandedScorer(expandedScorer === s.id ? null : s.id);
+                  }} style={{
+                    ...card(sel), fontFamily: FONT, textAlign: "left",
+                    opacity: disabled ? 0.5 : 1, cursor: disabled ? "not-allowed" : "pointer",
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span style={{ fontSize: "13px", fontWeight: 600, color: sel ? T.primaryDark : T.text, fontFamily: HEADING }}>{s.label}</span>
+                        <span style={{ fontSize: "9px", fontWeight: 600, fontFamily: MONO, padding: "2px 6px", borderRadius: "3px", background: disabled ? "#fee2e2" : s.id === "compass_ml" ? T.primaryLight : T.bgSub, color: disabled ? "#dc2626" : s.id === "compass_ml" ? T.primary : T.textTer }}>{s.tag}</span>
+                      </div>
+                    </div>
+                    {/* Expanded details */}
+                    {exp && (
+                      <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: `1px solid ${sel ? T.primary + "25" : T.borderLight}`, animation: "fadeIn 0.15s ease-out" }}>
+                        <div style={{ fontSize: "12px", color: sel ? T.primaryDark : T.textSec, lineHeight: 1.6 }}>{s.desc}</div>
+                      </div>
+                    )}
                   </button>
                 );
               })}
             </div>
-          )}
-
-          {/* Mutation table */}
-          <div style={{ maxHeight: "400px", overflow: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
-              <thead>
-                <tr style={{ background: T.bgSub, position: "sticky", top: 0, zIndex: 1 }}>
-                  {(panel === "custom" ? ["", "Gene", "Mutation", "Drug", "WHO Confidence", "Tier"] : ["Gene", "Mutation", "Drug", "WHO Confidence", "Tier"]).map(h => (
-                    <th key={h} style={{ textAlign: "left", padding: "10px 12px", fontSize: "10px", fontWeight: 600, color: T.textTer, textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: `1px solid ${T.borderLight}` }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {orgMutations.map((m, i) => {
-                  if (panel !== "custom" && !selected.has(i)) return null;
-                  const isCustom = panel === "custom";
-                  return (
-                    <tr key={i} onClick={isCustom ? () => toggleMut(i) : undefined} style={{ cursor: isCustom ? "pointer" : "default", borderBottom: `1px solid ${T.borderLight}`, background: isCustom && selected.has(i) ? T.primaryLight + "40" : "transparent", transition: "background 0.1s" }}>
-                      {isCustom && (
-                        <td style={{ padding: "10px 12px", width: 32 }}>
-                          <div style={{
-                            width: 16, height: 16, borderRadius: "4px",
-                            border: `2px solid ${selected.has(i) ? T.primary : T.border}`,
-                            background: selected.has(i) ? T.primary : "transparent",
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                          }}>{selected.has(i) && <Check size={10} color="#fff" strokeWidth={3} />}</div>
-                        </td>
-                      )}
-                      <td style={{ padding: "10px 12px", fontWeight: 600, fontFamily: MONO, color: T.text, fontSize: "12px" }}>{m.gene}</td>
-                      <td style={{ padding: "10px 12px", fontFamily: MONO, fontSize: "12px", color: T.textSec }}>{m.category === "gene_presence" ? "presence" : `${m.ref}${m.pos}${m.alt}`}</td>
-                      <td style={{ padding: "10px 12px" }}><DrugBadge drug={m.drug} /></td>
-                      <td style={{ padding: "10px 12px" }}><Badge variant={m.conf === "High" ? "success" : "warning"}>{m.conf}</Badge></td>
-                      <td style={{ padding: "10px 12px" }}><Badge variant={m.tier === 1 ? "primary" : "default"}>Tier {m.tier}</Badge></td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
           </div>
         </div>
-      </div>
 
-      {/* Scoring model */}
-      <div style={{ marginBottom: "16px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
-          <Brain size={16} color={T.primary} />
-          <h2 style={{ fontSize: "15px", fontWeight: 600, color: T.text, margin: 0, fontFamily: HEADING }}>Scoring Model</h2>
-          {!scorer && <span style={{ fontSize: "11px", color: T.warning, fontWeight: 500 }}>Select a model to continue</span>}
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr", gap: "10px" }}>
-          {[
-            { id: "heuristic", label: "Heuristic", desc: "Position-weighted composite across 5 biophysical features. Organism-aware weights.", tag: "Baseline", available: true },
-            { id: "compass_ml", label: "Compass-ML", desc: organism === "mtb" ? "Dual-branch CNN & RNA-FM with R-loop propagation attention." : `Trained on M. tuberculosis only. Not yet available for ${activeOrganism.name}. Falls back to heuristic.`, tag: organism === "mtb" ? "Recommended" : "MTB only", available: organism === "mtb" },
-          ].map(s => {
-            const disabled = !s.available;
-            return (
-              <button key={s.id} onClick={() => { if (!disabled) setScorer(s.id); else setScorer("heuristic"); }} style={{
-                padding: "16px 20px", borderRadius: "6px", cursor: disabled ? "not-allowed" : "pointer", fontFamily: FONT, textAlign: "left",
-                border: scorer === s.id ? `2px solid ${T.primary}` : `1px solid ${T.border}`,
-                background: scorer === s.id ? T.primaryLight : T.bg, opacity: disabled ? 0.5 : 1, transition: "all 0.15s",
-              }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                  <span style={{ fontSize: "14px", fontWeight: 600, color: scorer === s.id ? T.primaryDark : T.text, fontFamily: HEADING }}>{s.label}</span>
-                  <span style={{ fontSize: "10px", fontWeight: 600, fontFamily: MONO, padding: "2px 8px", borderRadius: "3px", background: disabled ? "#fee2e2" : s.id === "compass_ml" ? T.primaryLight : T.bgSub, color: disabled ? "#dc2626" : s.id === "compass_ml" ? T.primary : T.textTer }}>{s.tag}</span>
-                </div>
-                <div style={{ fontSize: "13px", color: scorer === s.id ? T.primaryDark : T.textSec, lineHeight: 1.5 }}>{s.desc}</div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
+        {/* ── Mutations selected (collapsible card) ── */}
+        <div style={{ marginBottom: "16px" }}>
+          <div style={{ background: T.bgSub, border: `1px solid ${T.borderLight}`, borderRadius: "4px", overflow: "hidden" }}>
+            <button onClick={() => setTargetsOpen(!targetsOpen)} style={{
+              width: "100%", display: "flex", alignItems: "center", gap: "12px", padding: "14px 16px",
+              background: "none", border: "none", cursor: "pointer", fontFamily: FONT,
+            }}>
+              <span style={{ fontSize: "13px", fontWeight: 600, color: selected.size > 0 ? T.text : T.danger }}>{selected.size} mutations selected</span>
+              <div style={{ display: "flex", gap: "4px", flex: 1 }}>
+                {selectedDrugs.map(d => <DrugBadge key={d} drug={d} />)}
+              </div>
+              <span style={{ fontSize: "11px", color: T.textSec, marginRight: "4px" }}>View targets</span>
+              <ChevronDown size={14} color={T.textSec} style={{ transform: targetsOpen ? "rotate(180deg)" : "none", transition: "0.2s" }} />
+            </button>
 
-      {/* Navigation */}
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: "28px", paddingTop: "20px", borderTop: `1px solid ${T.borderLight}` }}>
-        <Btn variant="secondary" icon={ArrowLeft} onClick={() => setStep(0)}>Back</Btn>
-        <Btn icon={ArrowRight} onClick={() => { if (!runName) setRunName(autoRunName); setStep(2); }} disabled={!step1Valid || selected.size === 0}>
-          Next: Review & Launch
-        </Btn>
-      </div>
-    </div>
-  );
+            {/* Expanded table */}
+            {targetsOpen && (
+              <div style={{ borderTop: `1px solid ${T.borderLight}` }}>
+                {/* Drug filter chips; only for Custom panel */}
+                {panel === "custom" && (
+                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", padding: "12px 16px", borderBottom: `1px solid ${T.borderLight}` }}>
+                    <button onClick={() => setSelected(new Set(ALL_INDICES))} style={{ padding: "5px 12px", borderRadius: "4px", border: `1px solid ${T.border}`, background: selected.size === orgMutations.length ? T.primary : T.bg, color: selected.size === orgMutations.length ? "#fff" : T.textSec, fontSize: "11px", fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>All ({orgMutations.length})</button>
+                    <button onClick={() => setSelected(new Set())} style={{ padding: "5px 12px", borderRadius: "4px", border: `1px solid ${T.border}`, background: selected.size === 0 ? T.bgSub : T.bg, color: T.textSec, fontSize: "11px", fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>None</button>
+                    <div style={{ width: 1, background: T.border, margin: "0 4px" }} />
+                    {[...new Set(orgMutations.map(m => m.drug))].map(drug => {
+                      const indices = orgMutations.map((m, i) => m.drug === drug ? i : -1).filter(i => i >= 0);
+                      const allSel = indices.every(i => selected.has(i));
+                      return (
+                        <button key={drug} onClick={() => {
+                          const n = new Set(selected);
+                          indices.forEach(i => allSel ? n.delete(i) : n.add(i));
+                          setSelected(n);
+                        }} style={{ padding: "5px 12px", borderRadius: "4px", border: `1px solid ${allSel ? T.primary : T.border}`, background: allSel ? T.primaryLight : T.bg, color: allSel ? T.primary : T.textSec, fontSize: "11px", fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>
+                          {drug} ({indices.length})
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
 
-  /* ══════════════════════════════════════════════════════════════════
-     SUMMARY ROW (for review step)
-     ══════════════════════════════════════════════════════════════════ */
-  const SummaryRow = ({ label, value, onClick }) => (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${T.borderLight}` }}>
-      <span style={{ fontSize: "12px", color: T.textSec }}>{label}</span>
-      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-        <span style={{ fontSize: "13px", fontWeight: 600, color: T.text }}>{value}</span>
-        {onClick && (
-          <button onClick={onClick} style={{ fontSize: "10px", color: T.primary, background: "none", border: "none", cursor: "pointer", fontFamily: FONT, fontWeight: 600, padding: "2px 6px", borderRadius: "3px" }}>
-            Edit
-          </button>
-        )}
-      </div>
-    </div>
-  );
-
-  /* ══════════════════════════════════════════════════════════════════
-     STEP 2: Review summary + Advanced config + Launch
-     ══════════════════════════════════════════════════════════════════ */
-  const Step2 = () => (
-    <div style={{ animation: "fadeIn 0.2s ease-out" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "20px" }}>
-        <Play size={16} color={T.primary} />
-        <h2 style={{ fontSize: "15px", fontWeight: 600, color: T.text, margin: 0, fontFamily: HEADING }}>Review & Launch</h2>
-      </div>
-
-      {/* Review summary card */}
-      <div style={{
-        background: T.bg, border: `1px solid ${T.border}`, borderRadius: "6px",
-        padding: "20px 24px", marginBottom: "20px",
-      }}>
-        {/* Run Name */}
-        <div style={{ marginBottom: "20px" }}>
-          <label style={{ fontSize: "12px", fontWeight: 600, color: T.textSec, display: "block", marginBottom: "6px" }}>Run Name</label>
-          <input value={runName} onChange={(e) => setRunName(e.target.value)}
-            style={{ width: "100%", padding: "10px 14px", border: `1px solid ${T.border}`, borderRadius: "4px", fontSize: "13px", fontFamily: MONO, color: T.text, background: T.bgSub, outline: "none", boxSizing: "border-box" }}
-            placeholder={autoRunName}
-          />
+                {/* Mutation table */}
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+                  <thead>
+                    <tr style={{ background: T.bg }}>
+                      {(panel === "custom" ? ["", "Gene", "Mutation", "Drug", "WHO Confidence", "Tier"] : ["Gene", "Mutation", "Drug", "WHO Confidence", "Tier"]).map(h => (
+                        <th key={h} style={{ textAlign: "left", padding: "10px 12px", fontSize: "10px", fontWeight: 600, color: T.textTer, textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: `1px solid ${T.borderLight}` }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {orgMutations.map((m, i) => {
+                      if (panel !== "custom" && !selected.has(i)) return null;
+                      const isCustom = panel === "custom";
+                      return (
+                        <tr key={i} onClick={isCustom ? () => toggleMut(i) : undefined} style={{ cursor: isCustom ? "pointer" : "default", borderBottom: `1px solid ${T.borderLight}`, background: isCustom && selected.has(i) ? T.primaryLight + "40" : "transparent", transition: "background 0.1s" }}>
+                          {isCustom && (
+                            <td style={{ padding: "10px 12px", width: 32 }}>
+                              <div style={{
+                                width: 16, height: 16, borderRadius: "4px",
+                                border: `2px solid ${selected.has(i) ? T.primary : T.border}`,
+                                background: selected.has(i) ? T.primary : "transparent",
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                              }}>{selected.has(i) && <Check size={10} color="#fff" strokeWidth={3} />}</div>
+                            </td>
+                          )}
+                          <td style={{ padding: "10px 12px", fontWeight: 600, fontFamily: MONO, color: T.text, fontSize: "12px" }}>{m.gene}</td>
+                          <td style={{ padding: "10px 12px", fontFamily: MONO, fontSize: "12px", color: T.textSec }}>{m.category === "gene_presence" ? "presence" : `${m.ref}${m.pos}${m.alt}`}</td>
+                          <td style={{ padding: "10px 12px" }}><DrugBadge drug={m.drug} /></td>
+                          <td style={{ padding: "10px 12px" }}><Badge variant={m.conf === "High" ? "success" : "warning"}>{m.conf}</Badge></td>
+                          <td style={{ padding: "10px 12px" }}><Badge variant={m.tier === 1 ? "primary" : "default"}>Tier {m.tier}</Badge></td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
 
-        <div style={{ height: 1, background: T.borderLight, marginBottom: "20px" }} />
-
-        {/* Summary grid */}
-        <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr", gap: "16px 32px" }}>
-          <SummaryRow label="Organism" value={activeOrganism.name} onClick={() => setStep(0)} />
-          <SummaryRow label="Panel" value={panel === "mdr14" ? "MDR-TB 14-plex" : panel === "mdr14_rnasep" ? "MDR-TB + RNaseP" : panel === "core5" ? "Core 5-plex" : panel === "full" ? `Full ${activeOrganism.name}` : "Custom"} onClick={() => setStep(0)} />
-          <SummaryRow label="Targets" value={`${selected.size} mutations across ${selectedDrugs.length} drug classes`} onClick={() => setStep(1)} />
-          <SummaryRow label="Scoring Model" value={scorer === "compass_ml" ? "Compass-ML" : "Heuristic"} onClick={() => setStep(1)} />
-          <SummaryRow label="Cas12a Variant" value={enzymeId === "enAsCas12a" ? "enAsCas12a (9 PAMs)" : "WT AsCas12a (TTTV)"} />
-          <SummaryRow label="Pipeline Mode" value={mode === "standard" ? `Standard (${MODULES.length} modules)` : `Custom (${selectedModules.size} modules)`} />
-        </div>
-
-        {/* Drug class chips */}
-        <div style={{ marginTop: "16px", paddingTop: "16px", borderTop: `1px solid ${T.borderLight}`, display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
-          <span style={{ fontSize: "11px", color: T.textTer, marginRight: "4px" }}>Drug classes:</span>
-          {selectedDrugs.map(d => <DrugBadge key={d} drug={d} />)}
-        </div>
-      </div>
-
-      {/* Advanced Configuration (collapsible) */}
-      <div style={{ marginBottom: "24px" }}>
-        <div style={{ background: T.bgSub, border: `1px solid ${T.borderLight}`, borderRadius: "6px", overflow: "hidden" }}>
+        {/* ── Advanced Configuration ── */}
+        <div style={{ marginBottom: "28px" }}>
+          <div style={{ background: T.bgSub, border: `1px solid ${T.borderLight}`, borderRadius: "4px", overflow: "hidden" }}>
           <button onClick={() => setConfigOpen(!configOpen)} style={{
             width: "100%", display: "flex", alignItems: "center", gap: "10px", padding: "14px 16px",
             background: "none", border: "none", cursor: "pointer", fontFamily: FONT,
@@ -677,6 +583,7 @@ const HomePage = ({ goTo, connected }) => {
                   ))}
                 </div>
               </div>
+              {/* Module selection for custom mode */}
               {mode === "custom" && (
                 <div style={{ marginBottom: "16px", background: T.bg, border: `1px solid ${T.borderLight}`, borderRadius: "4px", padding: "12px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
@@ -730,7 +637,7 @@ const HomePage = ({ goTo, connected }) => {
                 </div>
                 {enzymeId === "enAsCas12a" && (
                   <div style={{ marginTop: "8px", padding: "8px 12px", borderRadius: "4px", background: T.primaryLight + "40", border: `1px solid ${T.primary}20`, fontSize: "10px", color: T.textSec, lineHeight: 1.5 }}>
-                    <strong style={{ color: T.primaryDark }}>enAsCas12a</strong> (E174R/S542R/K548R) recognizes 9 PAM variants with activity penalties from Kleinstiver et al. 2019. Non-canonical PAMs receive a multiplicative score penalty: TTTT 0.75\u00d7, TTCV 0.65\u00d7, TATV 0.55\u00d7, CTTV 0.45\u00d7, TCTV 0.40\u00d7, TGTV 0.35\u00d7, ATTV 0.30\u00d7, GTTV 0.25\u00d7. Note: TTTT is not covered by TTTV (V = A/C/G) and is a distinct expanded recognition.
+                    <strong style={{ color: T.primaryDark }}>enAsCas12a</strong> (E174R/S542R/K548R) recognizes 9 PAM variants with activity penalties from Kleinstiver et al. 2019. Non-canonical PAMs receive a multiplicative score penalty: TTTT 0.75×, TTCV 0.65×, TATV 0.55×, CTTV 0.45×, TCTV 0.40×, TGTV 0.35×, ATTV 0.30×, GTTV 0.25×. Note: TTTT is not covered by TTTV (V = A/C/G) and is a distinct expanded recognition.
                   </div>
                 )}
               </div>
@@ -738,9 +645,9 @@ const HomePage = ({ goTo, connected }) => {
               <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr", gap: "0 32px" }}>
                 {[
                   ["PAM Patterns", enzymeId === "enAsCas12a" ? "TTTV + 8 expanded (incl. TTTT)" : "TTTV only"],
-                  ["Spacer Lengths", "18\u201323 nt"], ["GC Range", "40\u201385% (TB-adjusted)"],
-                  ["Min Discrimination", "2.0\u00d7"], ["SM Enhancement", "Enabled"],
-                  ["RPA Amplicon", "80\u2013120 bp (blood cfDNA)"],
+                  ["Spacer Lengths", "18–23 nt"], ["GC Range", "40–85% (TB-adjusted)"],
+                  ["Min Discrimination", "2.0×"], ["SM Enhancement", "Enabled"],
+                  ["RPA Amplicon", "80–120 bp (blood cfDNA)"],
                   ["Scoring Model", scorer === "compass_ml" ? "Compass-ML" : "Heuristic"],
                   ["PAM Penalty", enzymeId === "enAsCas12a" ? "Kleinstiver 2019" : "N/A (canonical only)"],
                 ].map(([k, v]) => (
@@ -760,282 +667,252 @@ const HomePage = ({ goTo, connected }) => {
               </div>
             </div>
           )}
+          </div>
         </div>
-      </div>
 
-      {/* Error */}
-      {error && <div style={{ color: T.danger, fontSize: "12px", marginBottom: "12px" }}>{error}</div>}
+        {/* Divider */}
+        <div style={{ height: 1, background: T.border, margin: "0 0 20px" }} />
 
-      {/* Navigation + Launch */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "20px", borderTop: `1px solid ${T.borderLight}` }}>
-        <Btn variant="secondary" icon={ArrowLeft} onClick={() => setStep(1)}>Back</Btn>
-        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-          <div style={{ display: "flex", gap: "16px", fontSize: "13px", color: T.textSec }}>
+        {/* Summary + Launch */}
+        {error && <div style={{ color: T.danger, fontSize: "12px", marginBottom: "12px" }}>{error}</div>}
+        <div style={{ display: "flex", alignItems: mobile ? "stretch" : "center", flexDirection: mobile ? "column" : "row", justifyContent: "space-between", gap: mobile ? "12px" : "16px" }}>
+          <div style={{ display: "flex", gap: "16px", fontSize: "13px", flexWrap: "wrap", alignItems: "center", color: T.textSec }}>
             <span>{selected.size} targets</span>
-            <span style={{ color: T.borderStrong }}>{"\u00b7"}</span>
-            <span>{selectedDrugs.length} drug classes</span>
-            <span style={{ color: T.borderStrong }}>{"\u00b7"}</span>
+            <span style={{ color: T.borderStrong }}>·</span>
+            <span>{[...new Set([...selected].map(i => orgMutations[i]?.drug))].length} drug classes</span>
+            <span style={{ color: T.borderStrong }}>·</span>
             <span>{mode === "custom" ? selectedModules.size : MODULES.length} modules</span>
           </div>
-          <Btn icon={launching ? Loader2 : Play} onClick={launch} disabled={launching || !canLaunch}>
-            {launching ? "Launching\u2026" : "Launch Pipeline"}
+          <Btn icon={launching ? Loader2 : Play} onClick={launch} disabled={launching || selected.size === 0 || !scorer || !!pipeJobId}>
+            {launching ? "Launching…" : pipeJobId ? (pipeDone ? "Complete" : "Running…") : "Launch Pipeline"}
           </Btn>
         </div>
+        </div>{/* close inner padding div */}
       </div>
-    </div>
-  );
 
-  /* ══════════════════════════════════════════════════════════════════
-     STEP 3: Pipeline Execution (replaces old inline pipeline view)
-     ══════════════════════════════════════════════════════════════════ */
-  const PipelineView = () => {
-    const activeModule = effectiveModules[pipeStep] || effectiveModules[0];
-    const ActiveIcon = activeModule.icon;
-    const statMap = {};
-    pipeStats.forEach(s => { statMap[s.module_id] = s; });
-    const fmtDur = (ms) => ms >= 60000 ? `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s` : ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`;
-    const fmtElapsed = (sec) => {
-      const m = Math.floor(sec / 60);
-      const s = Math.floor(sec % 60);
-      return m > 0 ? `${m}m ${s}s` : `${sec.toFixed(1)}s`;
-    };
-    const m2Out = statMap["M2"]?.candidates_out || 0;
-    const finalSize = statMap["M9"]?.candidates_out || statMap["M7"]?.candidates_out || 0;
+      {/* ═══ INLINE PIPELINE EXECUTION ═══ */}
+      {pipeJobId && (() => {
+        const activeModule = effectiveModules[pipeStep] || effectiveModules[0];
+        const ActiveIcon = activeModule.icon;
+        const statMap = {};
+        pipeStats.forEach(s => { statMap[s.module_id] = s; });
+        const fmtDur = (ms) => ms >= 60000 ? `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s` : ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`;
+        const fmtElapsed = (sec) => {
+          const m = Math.floor(sec / 60);
+          const s = Math.floor(sec % 60);
+          return m > 0 ? `${m}m ${s}s` : `${sec.toFixed(1)}s`;
+        };
+        const m2Out = statMap["M2"]?.candidates_out || 0;
+        const finalSize = statMap["M9"]?.candidates_out || statMap["M7"]?.candidates_out || 0;
 
-    return (
-      <div style={{ animation: "fadeIn 0.2s ease-out" }}>
-        {/* Config summary (collapsed) */}
-        <div style={{
-          background: T.bgSub, border: `1px solid ${T.borderLight}`, borderRadius: "6px",
-          padding: "12px 18px", marginBottom: "20px", display: "flex", gap: "16px", flexWrap: "wrap",
-          alignItems: "center", fontSize: "12px", color: T.textSec,
-        }}>
-          <span style={{ fontWeight: 600, color: T.text }}>{runName || autoRunName}</span>
-          <span>{"\u00b7"}</span>
-          <span>{activeOrganism.name}</span>
-          <span>{"\u00b7"}</span>
-          <span>{panel === "mdr14" ? "MDR-TB 14-plex" : panel === "mdr14_rnasep" ? "MDR-TB + RNaseP" : panel === "core5" ? "Core 5-plex" : panel === "full" ? "Full panel" : "Custom"}</span>
-          <span>{"\u00b7"}</span>
-          <span>{scorer === "compass_ml" ? "Compass-ML" : "Heuristic"}</span>
-          <span>{"\u00b7"}</span>
-          <span>{selected.size} targets</span>
-        </div>
-
-        <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: "6px", overflow: "hidden" }}>
-          {/* Queued state */}
-          {!pipeDone && pipeQueued && (
-            <div style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: "10px" }}>
-              <svg width="14" height="14" viewBox="0 0 16 16" style={{ animation: "spin 1s linear infinite", flexShrink: 0 }}>
-                <circle cx="8" cy="8" r="6" fill="none" stroke={T.border} strokeWidth="2" />
-                <path d="M8 2a6 6 0 0 1 6 6" fill="none" stroke={T.textTer} strokeWidth="2" strokeLinecap="round" />
-              </svg>
-              <span style={{ fontSize: "13px", color: T.textSec }}>Queued, waiting for previous run to complete</span>
-              <span style={{ fontFamily: MONO, fontSize: "12px", color: T.textTer, marginLeft: "auto", fontVariantNumeric: "tabular-nums" }}>{fmtElapsed(pipeElapsed)}</span>
-            </div>
-          )}
-
-          {/* Running state */}
-          {!pipeDone && !pipeQueued && (() => {
-            const stepEstSec = activeModule.estSec || 10;
-            const stepElapsed = (Date.now() - pipeStepStartRef.current) / 1000;
-            const subs = activeModule.substeps || [activeModule.execDesc];
-            const subDur = stepEstSec / subs.length;
-            const subIdx = Math.min(Math.floor(stepElapsed / Math.max(subDur, 0.5)), subs.length - 1);
-            const intraStep = Math.min(0.95, 1 - Math.exp(-2.5 * stepElapsed / stepEstSec));
-            const totalEstSec = effectiveModules.reduce((s, m) => s + (m.estSec || 10), 0);
-            const doneEstSec = effectiveModules.slice(0, pipeStep).reduce((s, m) => s + (m.estSec || 10), 0);
-            const curEstSec = activeModule.estSec || 10;
-            const pct = Math.min(99, ((doneEstSec + curEstSec * intraStep) / totalEstSec) * 100);
-            const remainingStepSec = Math.max(0, stepEstSec - stepElapsed);
-            const futureModulesSec = effectiveModules.slice(pipeStep + 1).reduce((s, m) => s + (m.estSec || 10), 0);
-            const remainingSec = Math.ceil(remainingStepSec + futureModulesSec);
-            const timeText = remainingSec >= 120 ? `~${Math.round(remainingSec / 60)} min left`
-              : remainingSec >= 60 ? `~1 min left`
-              : `~${remainingSec}s left`;
-            return (
-              <div style={{ padding: "16px 20px" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <svg width="14" height="14" viewBox="0 0 16 16" style={{ animation: "spin 1s linear infinite", flexShrink: 0 }}>
-                      <circle cx="8" cy="8" r="6" fill="none" stroke={T.border} strokeWidth="2" />
-                      <path d="M8 2a6 6 0 0 1 6 6" fill="none" stroke={T.primary} strokeWidth="2" strokeLinecap="round" />
-                    </svg>
-                    <span style={{ fontFamily: MONO, fontSize: "12px", color: T.text, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>
-                      {fmtElapsed(pipeElapsed)}
+        return (
+          <div style={{
+            background: T.bg,
+            border: `1px solid ${T.border}`,
+            borderRadius: "4px",
+            marginBottom: "24px", overflow: "hidden",
+          }}>
+            {/* Queued state */}
+            {!pipeDone && pipeQueued && (
+              <div style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: "10px" }}>
+                <svg width="14" height="14" viewBox="0 0 16 16" style={{ animation: "spin 1s linear infinite", flexShrink: 0 }}>
+                  <circle cx="8" cy="8" r="6" fill="none" stroke={T.border} strokeWidth="2" />
+                  <path d="M8 2a6 6 0 0 1 6 6" fill="none" stroke={T.textTer} strokeWidth="2" strokeLinecap="round" />
+                </svg>
+                <span style={{ fontSize: "13px", color: T.textSec }}>Queued, waiting for previous run to complete</span>
+                <span style={{ fontFamily: MONO, fontSize: "12px", color: T.textTer, marginLeft: "auto", fontVariantNumeric: "tabular-nums" }}>{fmtElapsed(pipeElapsed)}</span>
+              </div>
+            )}
+            {/* Running state */}
+            {!pipeDone && !pipeQueued && (() => {
+              const stepEstSec = activeModule.estSec || 10;
+              const stepElapsed = (Date.now() - pipeStepStartRef.current) / 1000;
+              const subs = activeModule.substeps || [activeModule.execDesc];
+              const subDur = stepEstSec / subs.length;
+              const subIdx = Math.min(Math.floor(stepElapsed / Math.max(subDur, 0.5)), subs.length - 1);
+              const intraStep = Math.min(0.95, 1 - Math.exp(-2.5 * stepElapsed / stepEstSec));
+              const totalEstSec = effectiveModules.reduce((s, m) => s + (m.estSec || 10), 0);
+              const doneEstSec = effectiveModules.slice(0, pipeStep).reduce((s, m) => s + (m.estSec || 10), 0);
+              const curEstSec = activeModule.estSec || 10;
+              const pct = Math.min(99, ((doneEstSec + curEstSec * intraStep) / totalEstSec) * 100);
+              const remainingStepSec = Math.max(0, stepEstSec - stepElapsed);
+              const futureModulesSec = effectiveModules.slice(pipeStep + 1).reduce((s, m) => s + (m.estSec || 10), 0);
+              const remainingSec = Math.ceil(remainingStepSec + futureModulesSec);
+              const timeText = remainingSec >= 120 ? `~${Math.round(remainingSec / 60)} min left`
+                : remainingSec >= 60 ? `~1 min left`
+                : `~${remainingSec}s left`;
+              return (
+                <div style={{ padding: "16px 20px" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <svg width="14" height="14" viewBox="0 0 16 16" style={{ animation: "spin 1s linear infinite", flexShrink: 0 }}>
+                        <circle cx="8" cy="8" r="6" fill="none" stroke={T.border} strokeWidth="2" />
+                        <path d="M8 2a6 6 0 0 1 6 6" fill="none" stroke={T.primary} strokeWidth="2" strokeLinecap="round" />
+                      </svg>
+                      <span style={{ fontFamily: MONO, fontSize: "12px", color: T.text, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>
+                        {fmtElapsed(pipeElapsed)}
+                      </span>
+                      <span style={{ fontSize: "11px", color: T.textTer }}>· {pipeStep + 1}/{effectiveModules.length} modules</span>
+                    </div>
+                    <span style={{ fontFamily: MONO, fontSize: "11px", color: T.textTer, fontVariantNumeric: "tabular-nums" }}>
+                      {Math.round(pct)}% · {timeText}
                     </span>
-                    <span style={{ fontSize: "11px", color: T.textTer }}>{"\u00b7"} {pipeStep + 1}/{effectiveModules.length} modules</span>
                   </div>
-                  <span style={{ fontFamily: MONO, fontSize: "11px", color: T.textTer, fontVariantNumeric: "tabular-nums" }}>
-                    {Math.round(pct)}% {"\u00b7"} {timeText}
-                  </span>
-                </div>
-                <div style={{ height: "6px", borderRadius: "3px", background: T.bgHover, overflow: "hidden" }}>
-                  <div style={{
-                    height: "100%", borderRadius: "3px",
-                    background: `linear-gradient(90deg, ${T.primary}, ${T.primary}dd)`,
-                    width: `${pct}%`, transition: "width 400ms ease-out",
-                  }} />
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "12px" }}>
-                  <div style={{ width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", animation: "subtlePulse 2s ease-in-out infinite", flexShrink: 0 }}>
-                    <ActiveIcon size={14} color={T.primary} strokeWidth={1.8} />
+                  <div style={{ height: "6px", borderRadius: "3px", background: T.bgHover, overflow: "hidden" }}>
+                    <div style={{
+                      height: "100%", borderRadius: "3px",
+                      background: `linear-gradient(90deg, ${T.primary}, ${T.primary}dd)`,
+                      width: `${pct}%`,
+                      transition: "width 400ms ease-out",
+                    }} />
                   </div>
-                  <div key={pipeStep} style={{ display: "flex", alignItems: "baseline", gap: "8px", animation: "stepSwipeUp 0.25s ease-out" }}>
-                    <span style={{ fontFamily: MONO, fontSize: "10px", color: T.textTer }}>{activeModule.id}</span>
-                    <span style={{ fontSize: "13px", fontWeight: 500, color: T.text }}>{activeModule.name}</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "12px" }}>
+                    <div style={{ width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", animation: "subtlePulse 2s ease-in-out infinite", flexShrink: 0 }}>
+                      <ActiveIcon size={14} color={T.primary} strokeWidth={1.8} />
+                    </div>
+                    <div key={pipeStep} style={{ display: "flex", alignItems: "baseline", gap: "8px", animation: "stepSwipeUp 0.25s ease-out" }}>
+                      <span style={{ fontFamily: MONO, fontSize: "10px", color: T.textTer }}>{activeModule.id}</span>
+                      <span style={{ fontSize: "13px", fontWeight: 500, color: T.text }}>{activeModule.name}</span>
+                    </div>
+                    <span style={{ fontSize: "11px", color: T.textSec }}>—</span>
+                    <div key={`sub-${pipeStep}-${subIdx}`} style={{ fontSize: "11px", color: T.textSec, animation: "substepSwipe 0.35s ease-out" }}>
+                      {subs[subIdx]}
+                    </div>
                   </div>
-                  <span style={{ fontSize: "11px", color: T.textSec }}>{"\u2014"}</span>
-                  <div key={`sub-${pipeStep}-${subIdx}`} style={{ fontSize: "11px", color: T.textSec, animation: "substepSwipe 0.35s ease-out" }}>
-                    {subs[subIdx]}
-                  </div>
-                </div>
-                {/* Module timeline */}
-                <details style={{ marginTop: "12px" }}>
-                  <summary style={{
-                    fontSize: "11px", color: T.textTer, cursor: "pointer", fontFamily: FONT,
-                    listStyle: "none", display: "flex", alignItems: "center", gap: "4px", userSelect: "none",
-                  }}>
-                    <ChevronDown size={11} color={T.textTer} strokeWidth={1.8} style={{ transition: "0.2s" }} />
-                    Module details
-                  </summary>
-                  <div style={{ marginTop: "8px", paddingTop: "8px", borderTop: `1px solid ${T.border}` }}>
-                    {effectiveModules.map((m, idx) => {
-                      const Icon = m.icon;
-                      const isDone = idx < pipeStep;
-                      const isCurrent = idx === pipeStep;
-                      const isLast = idx === effectiveModules.length - 1;
-                      const mSubs = m.substeps || [m.execDesc];
-                      return (
-                        <div key={m.id} style={{ display: "flex", gap: "0", marginBottom: isLast ? 0 : "2px" }}>
-                          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "24px", flexShrink: 0 }}>
-                            <div style={{
-                              width: "20px", height: "20px", borderRadius: "5px", display: "flex", alignItems: "center", justifyContent: "center",
-                              background: isDone ? T.primary + "18" : isCurrent ? T.primary + "18" : T.bgSub,
-                              border: `1px solid ${isDone ? T.primary + "40" : isCurrent ? T.primary + "60" : T.border}`,
-                            }}>
-                              {isDone ? <Check size={10} color={T.success} strokeWidth={2.5} />
-                                : <Icon size={10} color={isCurrent ? T.primary : T.textTer} strokeWidth={1.8} />}
-                            </div>
-                            {!isLast && <div style={{ width: "1px", flex: 1, minHeight: "4px", background: isDone ? T.primary + "30" : T.border }} />}
-                          </div>
-                          <div style={{ flex: 1, paddingLeft: "10px", paddingBottom: isLast ? 0 : "4px" }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                              <span style={{ fontFamily: MONO, fontSize: "9px", color: T.textTer }}>{m.id}</span>
-                              <span style={{ fontSize: "12px", fontWeight: isCurrent ? 600 : 400, color: isDone || isCurrent ? T.text : T.textTer }}>{m.name}</span>
-                              {isCurrent && <span style={{ fontSize: "9px", color: T.primary, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px" }}>running</span>}
-                            </div>
-                            {isCurrent && (
-                              <div style={{ marginTop: "4px", display: "flex", flexDirection: "column", gap: "2px", paddingLeft: "2px" }}>
-                                {mSubs.map((sub, si) => (
-                                  <div key={si} style={{ fontSize: "10px", color: si <= subIdx ? T.textSec : T.textTer, lineHeight: 1.4, display: "flex", alignItems: "center", gap: "4px" }}>
-                                    {si < subIdx ? <Check size={8} color={T.success} strokeWidth={2.5} /> : si === subIdx ? <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: T.primary, animation: "subtlePulse 2s ease-in-out infinite" }} /> : <span style={{ display: "inline-block", width: 8 }} />}
-                                    {sub}
-                                  </div>
-                                ))}
+                  <details style={{ marginTop: "12px" }}>
+                    <summary style={{
+                      fontSize: "11px", color: T.textTer, cursor: "pointer", fontFamily: FONT,
+                      listStyle: "none", display: "flex", alignItems: "center", gap: "4px", userSelect: "none",
+                    }}>
+                      <ChevronDown size={11} color={T.textTer} strokeWidth={1.8} style={{ transition: "0.2s" }} />
+                      Module details
+                    </summary>
+                    <div style={{ marginTop: "8px", paddingTop: "8px", borderTop: `1px solid ${T.border}` }}>
+                      {effectiveModules.map((m, idx) => {
+                        const Icon = m.icon;
+                        const isDone = idx < pipeStep;
+                        const isCurrent = idx === pipeStep;
+                        const isLast = idx === effectiveModules.length - 1;
+                        const mSubs = m.substeps || [m.execDesc];
+                        return (
+                          <div key={m.id} style={{ display: "flex", gap: "0", marginBottom: isLast ? 0 : "2px" }}>
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "24px", flexShrink: 0 }}>
+                              <div style={{
+                                width: "20px", height: "20px", borderRadius: "5px", display: "flex", alignItems: "center", justifyContent: "center",
+                                background: isDone ? T.primary + "18" : isCurrent ? T.primary + "18" : T.bgSub,
+                                border: `1px solid ${isDone ? T.primary + "40" : isCurrent ? T.primary + "60" : T.border}`,
+                              }}>
+                                {isDone ? <Check size={10} color={T.success} strokeWidth={2.5} />
+                                  : <Icon size={10} color={isCurrent ? T.primary : T.textTer} strokeWidth={1.8} />}
                               </div>
-                            )}
+                              {!isLast && <div style={{ width: "1px", flex: 1, minHeight: "4px", background: isDone ? T.primary + "30" : T.border }} />}
+                            </div>
+                            <div style={{ flex: 1, paddingLeft: "10px", paddingBottom: isLast ? 0 : "4px" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                <span style={{ fontFamily: MONO, fontSize: "9px", color: T.textTer }}>{m.id}</span>
+                                <span style={{ fontSize: "12px", fontWeight: isCurrent ? 600 : 400, color: isDone || isCurrent ? T.text : T.textTer }}>{m.name}</span>
+                                {isCurrent && <span style={{ fontSize: "9px", color: T.primary, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px" }}>running</span>}
+                              </div>
+                              {isCurrent && (
+                                <div style={{ marginTop: "4px", display: "flex", flexDirection: "column", gap: "2px", paddingLeft: "2px" }}>
+                                  {mSubs.map((sub, si) => (
+                                    <div key={si} style={{ fontSize: "10px", color: si <= subIdx ? T.textSec : T.textTer, lineHeight: 1.4, display: "flex", alignItems: "center", gap: "4px" }}>
+                                      {si < subIdx ? <Check size={8} color={T.success} strokeWidth={2.5} /> : si === subIdx ? <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: T.primary, animation: "subtlePulse 2s ease-in-out infinite" }} /> : <span style={{ display: "inline-block", width: 8 }} />}
+                                      {sub}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </details>
+                </div>
+              );
+            })()}
+
+            {/* Complete state */}
+            {pipeDone && (
+              <div style={{ padding: "16px 20px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <CheckCircle size={18} color={T.text} strokeWidth={2} />
+                    <span style={{ fontSize: "13px", fontWeight: 500, color: T.text, fontFamily: FONT }}>
+                      Pipeline complete
+                    </span>
+                    <span style={{ fontSize: "13px", color: T.textSec, fontFamily: MONO }}>
+                      {fmtElapsed(pipeElapsed)}
+                      {m2Out > 0 && ` · ${m2Out} candidates`}
+                      {finalSize > 0 && ` · ${finalSize} selected`}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => goTo("results", { jobId: pipeJobId, scorer })}
+                    style={{
+                      padding: "8px 20px", borderRadius: "6px",
+                      background: T.primary, color: "#fff", border: "none",
+                      fontSize: "13px", fontWeight: 500, fontFamily: FONT,
+                      cursor: "pointer",
+                    }}
+                  >
+                    View Results
+                  </button>
+                </div>
+
+                <button onClick={() => setShowLog(!showLog)} style={{
+                  background: "none", border: "none", cursor: "pointer", fontFamily: FONT,
+                  fontSize: "11px", color: T.textTer, display: "flex", alignItems: "center", gap: "4px", padding: 0,
+                }}>
+                  <ChevronDown size={12} style={{ transform: showLog ? "rotate(180deg)" : "none", transition: "0.2s" }} />
+                  {showLog ? "Hide" : "Show"} execution log
+                </button>
+
+                {showLog && (
+                  <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: `1px solid ${T.border}` }}>
+                    {effectiveModules.map((m, idx) => {
+                      const st = statMap[m.id];
+                      const Icon = m.icon;
+                      const isLast = idx === effectiveModules.length - 1;
+                      const subs = m.substeps || [m.execDesc];
+                      return (
+                        <div key={m.id} style={{ display: "flex", gap: "0", marginBottom: isLast ? 0 : "4px" }}>
+                          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "28px", flexShrink: 0 }}>
+                            <div style={{ width: "24px", height: "24px", borderRadius: "6px", background: T.bgSub, border: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              <Icon size={12} color={st ? T.text : T.textTer} strokeWidth={1.8} />
+                            </div>
+                            {!isLast && <div style={{ width: "1px", flex: 1, minHeight: "8px", background: T.border }} />}
+                          </div>
+                          <div style={{ flex: 1, paddingLeft: "12px", paddingBottom: isLast ? 0 : "8px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px" }}>
+                              <span style={{ fontFamily: MONO, fontSize: "10px", color: T.textTer, minWidth: "28px" }}>{m.id}</span>
+                              <span style={{ fontSize: "13px", fontWeight: 600, color: T.text, fontFamily: HEADING }}>{m.name}</span>
+                              {st && <span style={{ fontFamily: MONO, fontSize: "10px", color: T.success, marginLeft: "auto", display: "flex", alignItems: "center", gap: "4px" }}>
+                                <Check size={10} color={T.success} strokeWidth={2.5} />
+                                {fmtDur(st.duration_ms)}
+                              </span>}
+                            </div>
+                            <div style={{ fontSize: "11px", color: T.textSec, marginBottom: "6px", lineHeight: 1.4 }}>{m.desc}</div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: "2px", paddingLeft: "2px" }}>
+                              {subs.map((sub, si) => (
+                                <div key={si} style={{ fontSize: "11px", color: T.textTer, lineHeight: 1.5 }}>
+                                  {sub}
+                                </div>
+                              ))}
+                            </div>
+                            {st?.detail && <div style={{ fontSize: "11px", color: T.primary, marginTop: "4px", fontWeight: 500 }}>{st.detail}</div>}
                           </div>
                         </div>
                       );
                     })}
                   </div>
-                </details>
+                )}
               </div>
-            );
-          })()}
-
-          {/* Complete state */}
-          {pipeDone && (
-            <div style={{ padding: "16px 20px" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <CheckCircle size={18} color={T.text} strokeWidth={2} />
-                  <span style={{ fontSize: "13px", fontWeight: 500, color: T.text, fontFamily: FONT }}>Pipeline complete</span>
-                  <span style={{ fontSize: "13px", color: T.textSec, fontFamily: MONO }}>
-                    {fmtElapsed(pipeElapsed)}
-                    {m2Out > 0 && ` \u00b7 ${m2Out} candidates`}
-                    {finalSize > 0 && ` \u00b7 ${finalSize} selected`}
-                  </span>
-                </div>
-                <button
-                  onClick={() => goTo("results", { jobId: pipeJobId, scorer })}
-                  style={{
-                    padding: "8px 20px", borderRadius: "6px",
-                    background: T.primary, color: "#fff", border: "none",
-                    fontSize: "13px", fontWeight: 500, fontFamily: FONT, cursor: "pointer",
-                  }}
-                >View Results</button>
-              </div>
-
-              <button onClick={() => setShowLog(!showLog)} style={{
-                background: "none", border: "none", cursor: "pointer", fontFamily: FONT,
-                fontSize: "11px", color: T.textTer, display: "flex", alignItems: "center", gap: "4px", padding: 0,
-              }}>
-                <ChevronDown size={12} style={{ transform: showLog ? "rotate(180deg)" : "none", transition: "0.2s" }} />
-                {showLog ? "Hide" : "Show"} execution log
-              </button>
-
-              {showLog && (
-                <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: `1px solid ${T.border}` }}>
-                  {effectiveModules.map((m, idx) => {
-                    const st = statMap[m.id];
-                    const Icon = m.icon;
-                    const isLast = idx === effectiveModules.length - 1;
-                    const subs = m.substeps || [m.execDesc];
-                    return (
-                      <div key={m.id} style={{ display: "flex", gap: "0", marginBottom: isLast ? 0 : "4px" }}>
-                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "28px", flexShrink: 0 }}>
-                          <div style={{ width: "24px", height: "24px", borderRadius: "6px", background: T.bgSub, border: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            <Icon size={12} color={st ? T.text : T.textTer} strokeWidth={1.8} />
-                          </div>
-                          {!isLast && <div style={{ width: "1px", flex: 1, minHeight: "8px", background: T.border }} />}
-                        </div>
-                        <div style={{ flex: 1, paddingLeft: "12px", paddingBottom: isLast ? 0 : "8px" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px" }}>
-                            <span style={{ fontFamily: MONO, fontSize: "10px", color: T.textTer, minWidth: "28px" }}>{m.id}</span>
-                            <span style={{ fontSize: "13px", fontWeight: 600, color: T.text, fontFamily: HEADING }}>{m.name}</span>
-                            {st && <span style={{ fontFamily: MONO, fontSize: "10px", color: T.success, marginLeft: "auto", display: "flex", alignItems: "center", gap: "4px" }}>
-                              <Check size={10} color={T.success} strokeWidth={2.5} />
-                              {fmtDur(st.duration_ms)}
-                            </span>}
-                          </div>
-                          <div style={{ fontSize: "11px", color: T.textSec, marginBottom: "6px", lineHeight: 1.4 }}>{m.desc}</div>
-                          <div style={{ display: "flex", flexDirection: "column", gap: "2px", paddingLeft: "2px" }}>
-                            {subs.map((sub, si) => (
-                              <div key={si} style={{ fontSize: "11px", color: T.textTer, lineHeight: 1.5 }}>{sub}</div>
-                            ))}
-                          </div>
-                          {st?.detail && <div style={{ fontSize: "11px", color: T.primary, marginTop: "4px", fontWeight: 500 }}>{st.detail}</div>}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  /* ══════════════════════════════════════════════════════════════════
-     RENDER
-     ══════════════════════════════════════════════════════════════════ */
-  return (
-    <div style={{ padding: mobile ? "24px 16px" : "32px 40px", maxWidth: "960px" }}>
-      <div style={{ marginBottom: "8px" }}>
-        <h1 style={{ fontSize: "20px", fontWeight: 600, color: T.text, margin: 0, fontFamily: HEADING, letterSpacing: "-0.01em" }}>Pipeline Configuration</h1>
-      </div>
-
-      {step < 3 && <StepperHeader />}
-
-      <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: "8px", padding: mobile ? "20px" : "28px 32px", marginBottom: "24px" }}>
-        {step === 0 && <Step0 />}
-        {step === 1 && <Step1 />}
-        {step === 2 && <Step2 />}
-        {step === 3 && <PipelineView />}
-      </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 };
