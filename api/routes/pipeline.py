@@ -96,3 +96,34 @@ async def get_organisms() -> dict:
         except Exception:
             organisms.append({"id": oid, "name": oid, "error": "failed to load"})
     return {"organisms": organisms, "default": "mtb"}
+
+
+@router.get("/parameters")
+async def get_parameters():
+    """Return available config overrides with types, ranges, and defaults.
+
+    Frontend can use this to render dynamic parameter controls
+    without hardcoding parameter names or constraints.
+    """
+    return {
+        "overrides": {
+            "gc_min": {"type": "float", "min": 0.0, "max": 1.0, "default": 0.40, "section": "candidates", "description": "Minimum GC content for spacer"},
+            "gc_max": {"type": "float", "min": 0.0, "max": 1.0, "default": 0.60, "section": "candidates", "description": "Maximum GC content for spacer"},
+            "homopolymer_max": {"type": "int", "min": 2, "max": 8, "default": 4, "section": "candidates", "description": "Maximum homopolymer run length"},
+            "mfe_threshold": {"type": "float", "min": -10.0, "max": 0.0, "default": -2.0, "section": "candidates", "description": "Minimum folding energy threshold (kcal/mol)"},
+            "spacer_lengths": {"type": "list[int]", "min": 18, "max": 23, "default": [20, 21, 23], "section": "candidates", "description": "Allowed spacer lengths (nt)"},
+            "scorer": {"type": "str", "choices": ["compass_ml", "seq_cnn", "heuristic"], "default": "compass_ml", "section": "scoring", "description": "Efficiency scoring backend"},
+            "compass_ml_use_rlpa": {"type": "bool", "default": False, "section": "scoring", "description": "Enable R-loop attention (recommended: off for Phase 1)"},
+            "compass_ml_use_rnafm": {"type": "bool", "default": True, "section": "scoring", "description": "Use RNA-FM embeddings for crRNA features"},
+            "discrimination_min_ratio": {"type": "float", "min": 1.0, "max": 20.0, "default": 2.0, "section": "scoring", "description": "Minimum discrimination ratio for clinical use"},
+            "max_plex": {"type": "int", "min": 1, "max": 30, "default": 14, "section": "multiplex", "description": "Maximum panel size (number of targets)"},
+            "efficiency_weight": {"type": "float", "min": 0.0, "max": 1.0, "default": 0.5, "section": "multiplex", "description": "Weight for efficiency in panel optimization"},
+            "discrimination_weight": {"type": "float", "min": 0.0, "max": 1.0, "default": 0.2, "section": "multiplex", "description": "Weight for discrimination in panel optimization"},
+            "tm_min": {"type": "float", "min": 40.0, "max": 80.0, "default": 57.0, "section": "primers", "description": "Minimum primer melting temperature (°C)"},
+            "tm_max": {"type": "float", "min": 50.0, "max": 85.0, "default": 72.0, "section": "primers", "description": "Maximum primer melting temperature (°C)"},
+            "amplicon_min": {"type": "int", "min": 50, "max": 200, "default": 80, "section": "primers", "description": "Minimum amplicon length (bp)"},
+            "amplicon_max": {"type": "int", "min": 80, "max": 500, "default": 250, "section": "primers", "description": "Maximum amplicon length (bp)"},
+            "sample_type": {"type": "str", "choices": ["genomic", "cfDNA"], "default": "genomic", "section": "primers", "description": "Sample type (cfDNA caps amplicon at 120bp)"},
+            "sm_enabled": {"type": "bool", "default": True, "section": "synthetic_mismatch", "description": "Enable synthetic mismatch enhancement"},
+        }
+    }

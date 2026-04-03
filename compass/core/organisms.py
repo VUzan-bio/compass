@@ -54,6 +54,9 @@ class OrganismProfile:
     species_control: Optional[SpeciesControl] = None
     heuristic_weights: Optional[dict[str, float]] = None
     gc_optimal: float = 0.50
+    rpa_tm_opt: float = 62.0
+    proximity_max_distance: int = 100
+    offtarget_weights: Optional[dict[str, float]] = None
 
     @property
     def systematic_to_common(self) -> dict[str, str]:
@@ -137,6 +140,9 @@ def load_organism(organism_id: str, data_dir: Path | None = None) -> OrganismPro
         species_control=_parse_species_control(data),
         heuristic_weights=data.get("heuristic_weights"),
         gc_optimal=data.get("gc_optimal", 0.50),
+        rpa_tm_opt=data.get("rpa_tm_opt", 62.0),
+        proximity_max_distance=data.get("proximity_max_distance", 100),
+        offtarget_weights=data.get("offtarget_weights"),
     )
 
     _REGISTRY[organism_id] = profile

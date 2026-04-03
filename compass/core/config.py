@@ -121,11 +121,20 @@ class PrimerConfig(BaseModel):
     primer_length_max: int = 38
     tm_min: float = 57.0
     tm_max: float = 72.0
+    tm_opt: Optional[float] = None  # Organism-dependent; loaded from profile
     amplicon_min: int = 80
     amplicon_max: int = 250
+    sample_type: str = "genomic"  # "cfDNA" (80-120bp) or "genomic" (80-250bp)
     enable_allele_specific: bool = True
     as_rpa_deliberate_mm_pos: list[int] = Field(default=[-2, -3])
     max_pairs_per_candidate: int = 10
+
+    @model_validator(mode="after")
+    def _set_amplicon_from_sample_type(self) -> PrimerConfig:
+        """Set amplicon_max from sample_type if using default."""
+        if self.sample_type == "cfDNA" and self.amplicon_max == 250:
+            self.amplicon_max = 120
+        return self
 
 
 class PipelineConfig(BaseModel):

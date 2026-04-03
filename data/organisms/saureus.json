@@ -57,10 +57,13 @@
 
   "heuristic_weights": {
     "seed_position": 0.35,
-    "gc": 0.20,
-    "structure": 0.15,
+    "gc": 0.05,
+    "structure": 0.25,
     "homopolymer": 0.15,
-    "offtarget": 0.15
+    "offtarget": 0.20
   },
-  "gc_optimal": 0.35
+  "gc_optimal": 0.35,
+  "rpa_tm_opt": 58.0,
+  "proximity_max_distance": 120,
+  "offtarget_weights": {"seed": 10.0, "trunk": 2.0, "tail": 0.5}
 }

@@ -38,7 +38,7 @@ from Bio.Seq import Seq
 from Bio.SeqUtils import MeltingTemp as mt
 
 from compass.core.constants import (
-    RPA_AMPLICON_MAX,
+    RPA_AMPLICON_MAX_GENOMIC,
     RPA_AMPLICON_MIN,
     RPA_AMPLICON_SOFT_PENALTY_START,
     RPA_PRIMER_LENGTH_MAX,
@@ -91,13 +91,15 @@ class ASRPADesigner:
         tm_min: float = RPA_TM_MIN,
         tm_max: float = RPA_TM_MAX,
         amplicon_min: int = RPA_AMPLICON_MIN,
-        amplicon_max: int = RPA_AMPLICON_MAX,
+        amplicon_max: int = RPA_AMPLICON_MAX_GENOMIC,
+        tm_opt: float = 64.5,
         deliberate_mm_positions: tuple[int, ...] = (-2, -3),
     ) -> None:
         self.primer_len_min = primer_len_min
         self.primer_len_max = primer_len_max
         self.tm_min = tm_min
         self.tm_max = tm_max
+        self.tm_opt = tm_opt
         self.amplicon_min = amplicon_min
         self.amplicon_max = amplicon_max
         self.deliberate_mm_positions = deliberate_mm_positions
@@ -408,26 +410,24 @@ class ASRPADesigner:
 
         return primers[:50]  # wider pool to allow distant pairing
 
-    @staticmethod
-    def _pair_score(pair: RPAPrimerPair) -> float:
+    def _pair_score(self, pair: RPAPrimerPair) -> float:
         """Score an AS-RPA pair. Higher = better.
 
-        Includes cfDNA soft penalty: amplicons > 100 bp receive a linear
-        penalty of 0.3 × (length − 100) / (120 − 100), reflecting reduced
-        template capture probability on fragmented circulating DNA.
+        Includes cfDNA soft penalty: amplicons > soft_penalty_start receive
+        a linear penalty reflecting reduced template capture probability
+        on fragmented circulating DNA.
         """
-        tm_opt = 64.5  # Optimal for M.tb (65.6% GC)
-        fwd_tm = 1.0 - abs(pair.fwd.tm - tm_opt) / 8.0
-        rev_tm = 1.0 - abs(pair.rev.tm - tm_opt) / 8.0
-        amp = 1.0 - (pair.amplicon_length - RPA_AMPLICON_MIN) / (
-            RPA_AMPLICON_MAX - RPA_AMPLICON_MIN
-        )
+        fwd_tm = 1.0 - abs(pair.fwd.tm - self.tm_opt) / 8.0
+        rev_tm = 1.0 - abs(pair.rev.tm - self.tm_opt) / 8.0
+        amp_range = max(self.amplicon_max - self.amplicon_min, 1)
+        amp = 1.0 - (pair.amplicon_length - self.amplicon_min) / amp_range
         as_bonus = 0.3 if pair.has_allele_specific_primer else 0.0
         # cfDNA soft penalty: linear ramp above SOFT_PENALTY_START
         cfdna_penalty = 0.0
         if pair.amplicon_length > RPA_AMPLICON_SOFT_PENALTY_START:
+            penalty_range = max(self.amplicon_max - RPA_AMPLICON_SOFT_PENALTY_START, 1)
             cfdna_penalty = 0.3 * (
                 (pair.amplicon_length - RPA_AMPLICON_SOFT_PENALTY_START)
-                / (RPA_AMPLICON_MAX - RPA_AMPLICON_SOFT_PENALTY_START)
+                / penalty_range
             )
         return fwd_tm + rev_tm + amp + as_bonus - cfdna_penalty

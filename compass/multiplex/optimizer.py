@@ -135,6 +135,17 @@ class MultiplexOptimizer:
 
         if cfg.random_seed is not None:
             random.seed(cfg.random_seed)
+        else:
+            # Derive seed from input labels → same mutations = same panel, always.
+            # This ensures reproducibility without a global fixed seed.
+            import hashlib
+            label_str = "|".join(sorted(
+                t.label for t in targets if candidates_by_target.get(t.label)
+            ))
+            input_hash = hashlib.md5(label_str.encode()).hexdigest()
+            derived_seed = int(input_hash[:8], 16) % (2**31)
+            random.seed(derived_seed)
+            logger.debug("SA seed derived from input: %d", derived_seed)
 
         # Filter to targets with at least 1 candidate
         active_labels = [

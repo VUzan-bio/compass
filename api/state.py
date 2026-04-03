@@ -308,39 +308,75 @@ class AppState:
                 gff_annotation=Path(gff_path),
             )
 
-            # Apply whitelisted overrides only
-            ALLOWED_OVERRIDES = {
-                "cas_type", "pam_length", "spacer_length",
-                "gc_min", "gc_max", "off_target_threshold",
-                "multiplex_size", "primer_opt_tm", "primer_min_tm",
-                "primer_max_tm", "amplicon_size_range",
+            # Dot-path override mapping: frontend key → nested config path
+            _OVERRIDE_MAP = {
+                # Candidate generation
+                "gc_min": ("candidates", "gc_min"),
+                "gc_max": ("candidates", "gc_max"),
+                "homopolymer_max": ("candidates", "homopolymer_max"),
+                "mfe_threshold": ("candidates", "mfe_threshold"),
+                "spacer_lengths": ("candidates", "spacer_lengths"),
+                # Scoring
+                "scorer": ("scoring", "scorer"),
+                "compass_ml_use_rlpa": ("scoring", "compass_ml_use_rlpa"),
+                "compass_ml_use_rnafm": ("scoring", "compass_ml_use_rnafm"),
+                "discrimination_min_ratio": ("scoring", "discrimination_min_ratio"),
+                # Multiplex
+                "max_plex": ("multiplex", "max_plex"),
+                "efficiency_weight": ("multiplex", "efficiency_weight"),
+                "discrimination_weight": ("multiplex", "discrimination_weight"),
+                # Primers
+                "tm_min": ("primers", "tm_min"),
+                "tm_max": ("primers", "tm_max"),
+                "amplicon_min": ("primers", "amplicon_min"),
+                "amplicon_max": ("primers", "amplicon_max"),
+                "sample_type": ("primers", "sample_type"),
+                # Synthetic mismatch
+                "sm_enabled": ("synthetic_mismatch", "enabled"),
             }
-            # Scoring overrides applied to nested ScoringConfig
-            SCORING_OVERRIDES = {"scorer", "compass_ml_use_rlpa", "compass_ml_use_rnafm"}
+
             config_kwargs: dict[str, Any] = {
                 "name": job.name,
                 "output_dir": output_dir,
                 "organism": organism_id,
                 "reference": ref_config,
             }
-            scoring_kwargs: dict[str, Any] = {}
-            for key, val in job.config_overrides.items():
-                if key in ALLOWED_OVERRIDES:
-                    config_kwargs[key] = val
-                elif key in SCORING_OVERRIDES:
-                    scoring_kwargs[key] = val
 
-            if scoring_kwargs:
-                from compass.core.config import ScoringConfig
-                # Auto-resolve Compass-ML weights path
-                if scoring_kwargs.get("scorer", "compass_ml") == "compass_ml":
-                    # Don't set compass_ml_weights — let CompassMlScorer auto-detect
-                    # the best available checkpoint (phase1_v2 > diagnostic > best)
-                    scoring_kwargs.setdefault(
-                        "rnafm_cache_dir",
-                        Path("compass/data/embeddings/rnafm"),
+            # Group overrides by sub-config section
+            sub_config_kwargs: dict[str, dict[str, Any]] = {}
+            for key, val in job.config_overrides.items():
+                if key in _OVERRIDE_MAP:
+                    section, field = _OVERRIDE_MAP[key]
+                    sub_config_kwargs.setdefault(section, {})[field] = val
+                else:
+                    logger.warning("Unknown config override '%s' — ignored", key)
+
+            # Build sub-configs from overrides
+            from compass.core.config import (
+                CandidateConfig, ScoringConfig, MultiplexConfig,
+                PrimerConfig, SyntheticMismatchConfig,
+            )
+            _SUB_CONFIG_CLASSES = {
+                "candidates": CandidateConfig,
+                "scoring": ScoringConfig,
+                "multiplex": MultiplexConfig,
+                "primers": PrimerConfig,
+                "synthetic_mismatch": SyntheticMismatchConfig,
+            }
+            for section, kwargs in sub_config_kwargs.items():
+                cls = _SUB_CONFIG_CLASSES.get(section)
+                if cls:
+                    config_kwargs[section] = cls(**kwargs)
+
+            # Auto-resolve RNA-FM cache for scoring
+            scoring_section = sub_config_kwargs.get("scoring", {})
+            if scoring_section.get("scorer", "compass_ml") == "compass_ml":
+                if "scoring" not in config_kwargs:
+                    config_kwargs["scoring"] = ScoringConfig()
+                if config_kwargs["scoring"].rnafm_cache_dir is None:
+                    config_kwargs["scoring"].rnafm_cache_dir = Path(
+                        "compass/data/embeddings/rnafm"
                     )
-                config_kwargs["scoring"] = ScoringConfig(**scoring_kwargs)
 
             # Pre-warm model cache (blocks only the very first run)
             # Compass-ML is MTB-only; non-MTB organisms use heuristic/seq_cnn

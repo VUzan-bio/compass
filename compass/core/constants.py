@@ -76,7 +76,11 @@ RPA_PRIMER_LENGTH_MAX = 38
 RPA_TM_MIN = 57.0
 RPA_TM_MAX = 72.0
 RPA_AMPLICON_MIN = 80
-RPA_AMPLICON_MAX = 120  # Blood cfDNA: fragments ~100–160 bp, hard cap at 120 bp
+# Amplicon max is now sample_type-dependent in PrimerConfig.
+# cfDNA: 120bp (blood fragments ~100-160bp), genomic: 250bp.
+# This constant is kept as the cfDNA default for backward compatibility.
+RPA_AMPLICON_MAX_CFDNA = 120
+RPA_AMPLICON_MAX_GENOMIC = 250
 RPA_AMPLICON_SOFT_PENALTY_START = 100  # bp — linear penalty above this threshold
 PRIMER_DIMER_DG_THRESHOLD = -6.0
 
